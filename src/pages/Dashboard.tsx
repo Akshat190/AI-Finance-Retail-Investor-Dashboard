@@ -18,7 +18,8 @@ import {
   ArrowDown,
   Calendar,
   Clock,
-  Bitcoin
+  Bitcoin,
+  Bot
 } from 'lucide-react';
 
 interface MarketIndex {
@@ -284,6 +285,13 @@ export const Dashboard = () => {
                 >
                   <User className="mr-3 h-6 w-6" />
                   Profile
+                </Link>
+                <Link
+                  to="/chat"
+                  className="text-white hover:bg-indigo-700 group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+                >
+                  <Bot className="mr-3 h-6 w-6" />
+                  ChatBot
                 </Link>
               </nav>
             </div>

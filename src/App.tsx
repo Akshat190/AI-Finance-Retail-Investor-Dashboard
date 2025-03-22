@@ -10,6 +10,12 @@ import { Profile } from './pages/Profile';
 import { Loader2 } from 'lucide-react';
 import Investments from './pages/Investments';
 import Settings from './pages/Settings';
+import Chat from './pages/Chat';
+import { Toaster } from 'react-hot-toast';
+import Navigation from './components/Navigation';
+import Footer from './components/Footer';
+import { useAuth } from './context/AuthContext';
+
 
 // Simple Home component
 const Home = () => (
@@ -40,11 +46,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           setAuthenticated(true);
         } else {
@@ -59,7 +65,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     };
 
     checkAuth();
-  }, [navigate]);
+  }, [navigate, user]);
 
   if (loading) {
     return (
@@ -74,42 +80,54 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <Dashboard />
-        </ProtectedRoute>
-      } />
-      <Route path="/portfolio" element={
-        <ProtectedRoute>
-          <Portfolio />
-        </ProtectedRoute>
-      } />
-      <Route path="/screener" element={
-        <ProtectedRoute>
-          <Screener />
-        </ProtectedRoute>
-      } />
-      <Route path="/investments" element={
-        <ProtectedRoute>
-          <Investments />
-        </ProtectedRoute>
-      } />
-      <Route path="/settings" element={
-        <ProtectedRoute>
-          <Settings />
-        </ProtectedRoute>
-      } />
-      <Route path="/profile" element={
-        <ProtectedRoute>
-          <Profile />
-        </ProtectedRoute>
-      } />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      <Toaster position="top-right" />
+      <Navigation />
+      <main className="flex-grow">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/portfolio" element={
+            <ProtectedRoute>
+              <Portfolio />
+            </ProtectedRoute>
+          } />
+          <Route path="/screener" element={
+            <ProtectedRoute>
+              <Screener />
+            </ProtectedRoute>
+          } />
+          <Route path="/investments" element={
+            <ProtectedRoute>
+              <Investments />
+            </ProtectedRoute>
+          } />
+          <Route path="/chat" element={
+            <ProtectedRoute>
+              <Chat />
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+      <Footer />
+    </div>
   );
 }
 

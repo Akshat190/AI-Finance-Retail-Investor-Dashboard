@@ -16,7 +16,8 @@ import {
   LogOut,
   ArrowUp,
   ArrowDown,
-  RefreshCw
+  RefreshCw,
+  Bot
 } from 'lucide-react';
 import { getAIConfig } from '../lib/aiConfig';
 import { generateAIResponse } from '../lib/aiService';
@@ -544,6 +545,13 @@ export const Screener = () => {
                 >
                   <User className="mr-3 h-6 w-6" />
                   Profile
+                </Link>
+                <Link
+                  to="/chat"
+                  className="text-white hover:bg-indigo-700 group flex items-center px-2 py-2 text-sm font-medium rounded-md"
+                >
+                  <Bot className="mr-3 h-6 w-6" />
+                  ChatBot
                 </Link>
               </nav>
             </div>
