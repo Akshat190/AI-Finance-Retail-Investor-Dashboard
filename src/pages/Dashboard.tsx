@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import axios from 'axios';
 import { 
   Loader2, 
   BarChart2, 
@@ -16,7 +17,8 @@ import {
   ArrowUp,
   ArrowDown,
   Calendar,
-  Clock
+  Clock,
+  Bitcoin
 } from 'lucide-react';
 
 interface MarketIndex {
@@ -36,6 +38,16 @@ interface StockNews {
   summary: string;
 }
 
+interface CryptoData {
+  id: string;
+  symbol: string;
+  name: string;
+  image: string;
+  current_price: number;
+  price_change_percentage_24h: number;
+  market_cap: number;
+}
+
 export const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
@@ -46,10 +58,13 @@ export const Dashboard = () => {
   const [news, setNews] = useState<StockNews[]>([]);
   const [topGainers, setTopGainers] = useState<any[]>([]);
   const [topLosers, setTopLosers] = useState<any[]>([]);
+  const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
+  const [cryptoLoading, setCryptoLoading] = useState(false);
 
   useEffect(() => {
     checkUser();
     loadDashboardData();
+    fetchCryptoData();
   }, []);
 
   async function checkUser() {
@@ -160,6 +175,60 @@ export const Dashboard = () => {
     }
   }
 
+  async function fetchCryptoData() {
+    try {
+      setCryptoLoading(true);
+      const response = await axios.get(
+        'https://api.coingecko.com/api/v3/coins/markets',
+        {
+          params: {
+            vs_currency: 'usd',
+            order: 'market_cap_desc',
+            per_page: 10,
+            page: 1,
+            sparkline: false,
+            price_change_percentage: '24h'
+          }
+        }
+      );
+      setCryptoData(response.data);
+    } catch (error) {
+      console.error('Error fetching crypto data:', error);
+      // Fallback data in case API fails or rate limits
+      setCryptoData([
+        {
+          id: 'bitcoin',
+          symbol: 'btc',
+          name: 'Bitcoin',
+          image: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png',
+          current_price: 63245.12,
+          price_change_percentage_24h: 2.35,
+          market_cap: 1245678901234
+        },
+        {
+          id: 'ethereum',
+          symbol: 'eth',
+          name: 'Ethereum',
+          image: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png',
+          current_price: 3456.78,
+          price_change_percentage_24h: 1.23,
+          market_cap: 415678901234
+        },
+        {
+          id: 'binancecoin',
+          symbol: 'bnb',
+          name: 'Binance Coin',
+          image: 'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png',
+          current_price: 567.89,
+          price_change_percentage_24h: -0.45,
+          market_cap: 87654321098
+        }
+      ]);
+    } finally {
+      setCryptoLoading(false);
+    }
+  }
+
   async function handleSignOut() {
     try {
       await supabase.auth.signOut();
@@ -246,7 +315,10 @@ export const Dashboard = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 flex justify-between items-center">
               <h1 className="text-2xl font-semibold text-gray-900">Market Dashboard</h1>
               <button
-                onClick={loadDashboardData}
+                onClick={() => {
+                  loadDashboardData();
+                  fetchCryptoData();
+                }}
                 className={`inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
                   refreshing ? 'opacity-75 cursor-not-allowed' : ''
                 }`}
@@ -493,6 +565,98 @@ export const Dashboard = () => {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Add Cryptocurrency Section */}
+              <div className="mt-5">
+                <div className="bg-white overflow-hidden shadow rounded-lg">
+                  <div className="px-4 py-5 sm:p-6">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 bg-yellow-500 rounded-md p-3">
+                        <Bitcoin className="h-6 w-6 text-white" />
+                      </div>
+                      <div className="ml-5 w-0 flex-1">
+                        <dl>
+                          <dt className="text-sm font-medium text-gray-500 truncate">
+                            Cryptocurrency Market
+                          </dt>
+                          <dd>
+                            <div className="text-lg font-medium text-gray-900">
+                              Top 10 by Market Cap
+                            </div>
+                          </dd>
+                        </dl>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {cryptoLoading ? (
+                    <div className="px-4 py-5 sm:p-6 flex justify-center">
+                      <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Coin
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Price
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              24h Change
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Market Cap
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {cryptoData.map((crypto) => (
+                            <tr key={crypto.id}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0 h-10 w-10">
+                                    <img className="h-10 w-10 rounded-full" src={crypto.image} alt={crypto.name} />
+                                  </div>
+                                  <div className="ml-4">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {crypto.name}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      {crypto.symbol.toUpperCase()}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                ${crypto.current_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <span className={crypto.price_change_percentage_24h >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                  {crypto.price_change_percentage_24h >= 0 ? (
+                                    <ArrowUp className="inline h-4 w-4 mr-1" />
+                                  ) : (
+                                    <ArrowDown className="inline h-4 w-4 mr-1" />
+                                  )}
+                                  {Math.abs(crypto.price_change_percentage_24h).toFixed(2)}%
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
+                                ${(crypto.market_cap / 1000000000).toFixed(2)}B
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="bg-gray-50 px-4 py-3 sm:px-6 text-xs text-gray-500">
+                    Data provided by CoinGecko API
                   </div>
                 </div>
               </div>

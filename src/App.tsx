@@ -8,6 +8,8 @@ import { Portfolio } from './pages/Portfolio';
 import { Screener } from './pages/Screener';
 import { Profile } from './pages/Profile';
 import { Loader2 } from 'lucide-react';
+import Investments from './pages/Investments';
+import Settings from './pages/Settings';
 
 // Simple Home component
 const Home = () => (
@@ -89,6 +91,16 @@ function App() {
       <Route path="/screener" element={
         <ProtectedRoute>
           <Screener />
+        </ProtectedRoute>
+      } />
+      <Route path="/investments" element={
+        <ProtectedRoute>
+          <Investments />
+        </ProtectedRoute>
+      } />
+      <Route path="/settings" element={
+        <ProtectedRoute>
+          <Settings />
         </ProtectedRoute>
       } />
       <Route path="/profile" element={
