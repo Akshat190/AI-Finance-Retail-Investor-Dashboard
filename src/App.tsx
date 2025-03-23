@@ -15,31 +15,31 @@ import { Toaster } from 'react-hot-toast';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import { useAuth } from './context/AuthContext';
-
+import Home from './pages/Home';
 
 // Simple Home component
-const Home = () => (
-  <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
-    <h1 className="text-4xl font-bold text-indigo-600 mb-6">AI Investor</h1>
-    <p className="text-xl text-gray-700 max-w-2xl text-center mb-8">
-      Your intelligent assistant for making smarter investment decisions
-    </p>
-    <div className="flex gap-4">
-      <a 
-        href="/login" 
-        className="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-      >
-        Log In
-      </a>
-      <a 
-        href="/register" 
-        className="px-6 py-3 border border-indigo-600 text-indigo-600 rounded-md hover:bg-indigo-50 transition-colors"
-      >
-        Register
-      </a>
-    </div>
-  </div>
-);
+// const Home = () => (
+//   <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
+//     <h1 className="text-4xl font-bold text-indigo-600 mb-6">AI Investor</h1>
+//     <p className="text-xl text-gray-700 max-w-2xl text-center mb-8">
+//       Your intelligent assistant for making smarter investment decisions
+//     </p>
+//     <div className="flex gap-4">
+//       <a 
+//         href="/login" 
+//         className="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+//       >
+//         Log In
+//       </a>
+//       <a 
+//         href="/register" 
+//         className="px-6 py-3 border border-indigo-600 text-indigo-600 rounded-md hover:bg-indigo-50 transition-colors"
+//       >
+//         Register
+//       </a>
+//     </div>
+//   </div>
+// );
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {

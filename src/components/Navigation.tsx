@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { LogOut } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { toast } from 'react-hot-toast';
 
 const Navigation: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, setUser } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   
   const links = [
     // { name: 'Home', path: '/' },
@@ -15,11 +19,32 @@ const Navigation: React.FC = () => {
     { name: 'Investments', path: '/investments' },
     { name: 'Chat', path: '/chat' },
     { name: 'Settings', path: '/settings' },
-    { name: 'Profile', path: '/profile' },
+    // { name: 'Profile', path: '/profile' },
   ];
   
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
+  };
+  
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Clear user from context
+      setUser(null);
+      
+      // Redirect to login page
+      navigate('/login');
+      
+      toast.success('Logged out successfully');
+    } catch (error) {
+      console.error('Error logging out:', error);
+      toast.error('Failed to log out');
+    }
   };
   
   return (
@@ -49,11 +74,14 @@ const Navigation: React.FC = () => {
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
             {user ? (
               <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-700">Hello, {user.displayName || user.email}</span>
+                <Link to="/profile" className="text-gray-700 hover:text-indigo-600">
+                  Profile
+                </Link>
                 <button
-                  onClick={logout}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  onClick={handleLogout}
+                  className="flex items-center text-gray-700 hover:text-indigo-600"
                 >
+                  <LogOut className="h-4 w-4 mr-1" />
                   Logout
                 </button>
               </div>
@@ -61,15 +89,15 @@ const Navigation: React.FC = () => {
               <div className="flex items-center space-x-4">
                 <Link
                   to="/login"
-                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                  className="text-gray-700 hover:text-indigo-600"
                 >
                   Login
                 </Link>
                 <Link
                   to="/register"
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
                 >
-                  Register
+                  Sign Up
                 </Link>
               </div>
             )}
@@ -130,10 +158,7 @@ const Navigation: React.FC = () => {
                 <p className="text-sm font-medium text-gray-800">{user.email}</p>
               </div>
               <button
-                onClick={() => {
-                  logout();
-                  setIsMenuOpen(false);
-                }}
+                onClick={handleLogout}
                 className="block w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
               >
                 Logout

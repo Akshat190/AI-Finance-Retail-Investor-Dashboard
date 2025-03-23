@@ -19,8 +19,19 @@ import {
   Calendar,
   Clock,
   Bitcoin,
-  Bot
+  Bot,
+  Newspaper
 } from 'lucide-react';
+import InvestmentTaxCalculator from '../components/InvestmentTaxCalculator';
+import PortfolioManager from '../components/PortfolioManager';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Pie } from 'react-chartjs-2';
+
+// Register Chart.js components
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface MarketIndex {
   name: string;
@@ -49,10 +60,48 @@ interface CryptoData {
   market_cap: number;
 }
 
+interface Stock {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+}
+
+interface Crypto {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  marketCap: number;
+}
+
+interface NewsItem {
+  id: string;
+  title: string;
+  summary: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+  imageUrl?: string;
+}
+
+// Asset allocation data
+interface AssetAllocation {
+  label: string;
+  value: number;
+  color: string;
+}
+
 export const Dashboard = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, logout } = useAuth();
+  const [loading, setLoading] = useState({
+    stocks: true,
+    crypto: true,
+    news: true
+  });
   const [refreshing, setRefreshing] = useState(false);
   const [usIndices, setUsIndices] = useState<MarketIndex[]>([]);
   const [indianIndices, setIndianIndices] = useState<MarketIndex[]>([]);
@@ -61,28 +110,59 @@ export const Dashboard = () => {
   const [topLosers, setTopLosers] = useState<any[]>([]);
   const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
   const [cryptoLoading, setCryptoLoading] = useState(false);
+  const [stocks, setStocks] = useState<Stock[]>([]);
+  const [crypto, setCrypto] = useState<Crypto[]>([]);
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
+  const [assetAllocation, setAssetAllocation] = useState<AssetAllocation[]>([
+    { label: 'Stocks', value: 65, color: '#6366F1' }, // Indigo
+    { label: 'Bonds', value: 20, color: '#10B981' },  // Green
+    { label: 'Crypto', value: 10, color: '#F59E0B' }, // Yellow/Amber
+    { label: 'Cash', value: 5, color: '#6B7280' }     // Gray
+  ]);
 
+  // Prepare chart data
+  const pieChartData = {
+    labels: assetAllocation.map(asset => asset.label),
+    datasets: [
+      {
+        data: assetAllocation.map(asset => asset.value),
+        backgroundColor: assetAllocation.map(asset => asset.color),
+        borderColor: assetAllocation.map(asset => asset.color),
+        borderWidth: 1,
+      },
+    ],
+  };
+  
+  // Chart options
+  const pieChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: {
+          usePointStyle: true,
+          padding: 20,
+          font: {
+            size: 12
+          }
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            return `${context.label}: ${context.raw}%`;
+          }
+        }
+      }
+    },
+  };
+  
   useEffect(() => {
-    checkUser();
     loadDashboardData();
     fetchCryptoData();
+    fetchMarketData();
   }, []);
-
-  async function checkUser() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUser(user);
-      } else {
-        navigate('/login');
-      }
-    } catch (error) {
-      console.error('Error checking user:', error);
-      navigate('/login');
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function loadDashboardData() {
     try {
@@ -230,16 +310,92 @@ export const Dashboard = () => {
     }
   }
 
-  async function handleSignOut() {
+  async function fetchMarketData() {
     try {
-      await supabase.auth.signOut();
-      navigate('/login');
+      // In a real app, you would fetch from actual APIs
+      // For now, we'll use dummy data
+      
+      // Dummy stocks data
+      const dummyStocks: Stock[] = [
+        { symbol: 'AAPL', name: 'Apple Inc.', price: 175.34, change: 2.45, changePercent: 1.42 },
+        { symbol: 'MSFT', name: 'Microsoft Corp.', price: 328.79, change: 1.23, changePercent: 0.38 },
+        { symbol: 'GOOGL', name: 'Alphabet Inc.', price: 142.56, change: -0.87, changePercent: -0.61 },
+        { symbol: 'AMZN', name: 'Amazon.com Inc.', price: 132.45, change: 3.21, changePercent: 2.48 },
+        { symbol: 'TSLA', name: 'Tesla Inc.', price: 245.67, change: -5.43, changePercent: -2.16 }
+      ];
+      
+      // Dummy crypto data
+      const dummyCrypto: Crypto[] = [
+        { symbol: 'BTC', name: 'Bitcoin', price: 42567.89, change: 1234.56, changePercent: 2.98, marketCap: 824.5 },
+        { symbol: 'ETH', name: 'Ethereum', price: 2345.67, change: 87.65, changePercent: 3.87, marketCap: 281.3 },
+        { symbol: 'BNB', name: 'Binance Coin', price: 345.67, change: -12.34, changePercent: -3.45, marketCap: 53.2 },
+        { symbol: 'SOL', name: 'Solana', price: 98.76, change: 5.43, changePercent: 5.82, marketCap: 42.1 },
+        { symbol: 'ADA', name: 'Cardano', price: 0.45, change: 0.02, changePercent: 4.65, marketCap: 15.8 }
+      ];
+      
+      // Dummy news data
+      const dummyNews: NewsItem[] = [
+        {
+          id: '1',
+          title: 'Fed Signals Potential Rate Cuts as Inflation Eases',
+          summary: 'The Federal Reserve indicated it may begin cutting interest rates soon as inflation shows signs of cooling.',
+          url: '#',
+          source: 'Financial Times',
+          publishedAt: '2023-07-15T14:30:00Z',
+          imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+        },
+        {
+          id: '2',
+          title: 'Tech Stocks Rally on Strong Earnings Reports',
+          summary: 'Major technology companies reported better-than-expected quarterly earnings, driving a market rally.',
+          url: '#',
+          source: 'Wall Street Journal',
+          publishedAt: '2023-07-14T18:45:00Z',
+          imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+        },
+        {
+          id: '3',
+          title: 'Bitcoin Surges Past $40,000 as Institutional Adoption Grows',
+          summary: 'Bitcoin prices have surged as more institutional investors add the cryptocurrency to their portfolios.',
+          url: '#',
+          source: 'Bloomberg',
+          publishedAt: '2023-07-13T09:15:00Z',
+          imageUrl: 'https://images.unsplash.com/photo-1518546305927-5a555bb7020d?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+        }
+      ];
+      
+      setStocks(dummyStocks);
+      setCrypto(dummyCrypto);
+      setNewsItems(dummyNews);
+      
+      // Update loading state
+      setLoading({
+        stocks: false,
+        crypto: false,
+        news: false
+      });
+      
+      // Log to confirm data is loaded
+      console.log("Dashboard data loaded:", { stocks: dummyStocks, crypto: dummyCrypto, news: dummyNews });
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Error fetching market data:', error);
+      toast.error('Failed to load market data');
     }
   }
 
-  if (loading) {
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success('Logged out successfully');
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Failed to logout');
+    }
+  };
+
+  if (loading.stocks || loading.crypto || loading.news) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
@@ -248,430 +404,434 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-100">
-      {/* Sidebar */}
-      <div className="hidden md:flex md:flex-shrink-0">
-        <div className="flex flex-col w-64">
-          <div className="flex flex-col h-0 flex-1 bg-indigo-800">
-            <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-              <div className="flex items-center flex-shrink-0 px-4">
-                <span className="text-white text-xl font-semibold">AI Investor</span>
-              </div>
-              <nav className="mt-5 flex-1 px-2 space-y-1">
-                <Link
-                  to="/dashboard"
-                  className="bg-indigo-900 text-white group flex items-center px-2 py-2 text-sm font-medium rounded-md"
-                >
-                  <BarChart2 className="mr-3 h-6 w-6" />
-                  Dashboard
-                </Link>
-                <Link
-                  to="/portfolio"
-                  className="text-white hover:bg-indigo-700 group flex items-center px-2 py-2 text-sm font-medium rounded-md"
-                >
-                  <PieChart className="mr-3 h-6 w-6" />
-                  Portfolio
-                </Link>
-                <Link
-                  to="/screener"
-                  className="text-white hover:bg-indigo-700 group flex items-center px-2 py-2 text-sm font-medium rounded-md"
-                >
-                  <Search className="mr-3 h-6 w-6" />
-                  Stock Screener
-                </Link>
-                <Link
-                  to="/profile"
-                  className="text-white hover:bg-indigo-700 group flex items-center px-2 py-2 text-sm font-medium rounded-md"
-                >
-                  <User className="mr-3 h-6 w-6" />
-                  Profile
-                </Link>
-                <Link
-                  to="/chat"
-                  className="text-white hover:bg-indigo-700 group flex items-center px-2 py-2 text-sm font-medium rounded-md"
-                >
-                  <Bot className="mr-3 h-6 w-6" />
-                  ChatBot
-                </Link>
-              </nav>
-            </div>
-            <div className="flex-shrink-0 flex border-t border-indigo-700 p-4">
-              <button
-                onClick={handleSignOut}
-                className="flex-shrink-0 w-full group block"
-              >
-                <div className="flex items-center">
-                  <div>
-                    <LogOut className="inline-block h-5 w-5 text-indigo-300 group-hover:text-indigo-200" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-indigo-300 group-hover:text-indigo-200">
-                      Sign Out
-                    </p>
-                  </div>
+    <div className="container mx-auto px-4 py-8">
+      {/* Header with logout button */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <button
+          onClick={handleLogout}
+          className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Logout
+        </button>
+      </div>
+      
+      {/* Portfolio Summary Cards - Always visible */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-gray-900">Portfolio Value</h2>
+            <DollarSign className="h-5 w-5 text-indigo-600" />
+          </div>
+          <p className="text-3xl font-bold text-gray-900">$124,567.89</p>
+          <div className="flex items-center mt-2 text-sm">
+            <span className="text-green-600 flex items-center">
+              <TrendingUp className="h-4 w-4 mr-1" />
+              +$1,234.56 (1.2%)
+            </span>
+            <span className="text-gray-500 ml-2">Today</span>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-gray-900">Asset Allocation</h2>
+            <PieChart className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div className="h-48 mt-2">
+            <Pie data={pieChartData} options={pieChartOptions} />
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-gray-900">Watchlist</h2>
+            <BarChart2 className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div className="space-y-2">
+            {stocks.slice(0, 3).map((stock) => (
+              <div key={stock.symbol} className="flex justify-between items-center">
+                <div>
+                  <p className="font-medium">{stock.symbol}</p>
+                  <p className="text-xs text-gray-500">{stock.name}</p>
                 </div>
-              </button>
-            </div>
+                <div className="text-right">
+                  <p className="font-medium">${stock.price.toFixed(2)}</p>
+                  <p className={`text-xs ${stock.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
-
-      {/* Main content */}
-      <div className="flex flex-col w-0 flex-1 overflow-hidden">
-        <main className="flex-1 relative z-0 overflow-y-auto focus:outline-none">
-          <div className="py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 flex justify-between items-center">
-              <h1 className="text-2xl font-semibold text-gray-900">Market Dashboard</h1>
-              <button
-                onClick={() => {
-                  loadDashboardData();
-                  fetchCryptoData();
-                }}
-                className={`inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                  refreshing ? 'opacity-75 cursor-not-allowed' : ''
-                }`}
-                disabled={refreshing}
-              >
-                <RefreshCw className={`-ml-0.5 mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Refreshing...' : 'Refresh'}
-              </button>
+      
+      {/* Main Tabs */}
+      <Tabs defaultValue="portfolio" className="w-full">
+        <TabsList className="mb-6">
+          <TabsTrigger value="portfolio">Portfolio Manager</TabsTrigger>
+          <TabsTrigger value="calculator">Investment Calculator</TabsTrigger>
+          <TabsTrigger value="market">Market Trends</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="portfolio">
+          <PortfolioManager />
+        </TabsContent>
+        
+        <TabsContent value="calculator">
+          <InvestmentTaxCalculator />
+        </TabsContent>
+        
+        <TabsContent value="market">
+          {/* Market Trends Tab Content */}
+          <div className="space-y-8">
+            {/* Market Overview */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">Market Overview</h2>
+                <BarChart2 className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">S&P 500</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">4,587.32</span>
+                      <span className="ml-2 text-green-600 flex items-center text-sm">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        1.2%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Dow Jones</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">35,432.67</span>
+                      <span className="ml-2 text-green-600 flex items-center text-sm">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        0.8%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Nasdaq</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">14,765.23</span>
+                      <span className="ml-2 text-red-600 flex items-center text-sm">
+                        <TrendingDown className="h-4 w-4 mr-1" />
+                        0.3%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">10Y Treasury</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">3.45%</span>
+                      <span className="ml-2 text-red-600 flex items-center text-sm">
+                        <TrendingDown className="h-4 w-4 mr-1" />
+                        0.05%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">VIX</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">18.34</span>
+                      <span className="ml-2 text-green-600 flex items-center text-sm">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        2.1%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Gold</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">$1,876.45</span>
+                      <span className="ml-2 text-green-600 flex items-center text-sm">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        0.6%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Crude Oil</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">$78.32</span>
+                      <span className="ml-2 text-red-600 flex items-center text-sm">
+                        <TrendingDown className="h-4 w-4 mr-1" />
+                        1.2%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">EUR/USD</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">1.0845</span>
+                      <span className="ml-2 text-green-600 flex items-center text-sm">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        0.3%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Bitcoin</span>
+                    <div className="flex items-center">
+                      <span className="font-medium">$42,567</span>
+                      <span className="ml-2 text-green-600 flex items-center text-sm">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        2.9%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-              {/* Market Overview */}
-              <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-2">
-                {/* US Market Indices */}
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="px-4 py-5 sm:p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
-                        <Globe className="h-6 w-6 text-white" />
-                      </div>
-                      <div className="ml-5 w-0 flex-1">
-                        <dl>
-                          <dt className="text-sm font-medium text-gray-500 truncate">
-                            US Market Indices
-                          </dt>
-                          <dd>
-                            <div className="text-lg font-medium text-gray-900">
-                              {new Date().toLocaleDateString('en-US', { 
-                                weekday: 'long', 
-                                year: 'numeric', 
-                                month: 'long', 
-                                day: 'numeric' 
-                              })}
-                            </div>
-                          </dd>
-                        </dl>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 px-4 py-4 sm:px-6">
-                    <div className="flow-root">
-                      <ul className="-my-4 divide-y divide-gray-200">
-                        {usIndices.map((index) => (
-                          <li key={index.name} className="py-4">
-                            <div className="flex items-center justify-between">
-                              <p className="text-sm font-medium text-gray-900">{index.name}</p>
-                              <div className="flex items-center">
-                                <p className="text-sm font-medium text-gray-900 mr-2">
-                                  {index.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </p>
-                                <div className={`flex items-center ${
-                                  index.change >= 0 ? 'text-green-600' : 'text-red-600'
-                                }`}>
-                                  {index.change >= 0 ? (
-                                    <ArrowUp className="h-4 w-4" />
-                                  ) : (
-                                    <ArrowDown className="h-4 w-4" />
-                                  )}
-                                  <span className="text-sm ml-1">
-                                    {Math.abs(index.change).toFixed(2)} ({Math.abs(index.changePercent).toFixed(2)}%)
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Indian Market Indices */}
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="px-4 py-5 sm:p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
-                        <Globe className="h-6 w-6 text-white" />
-                      </div>
-                      <div className="ml-5 w-0 flex-1">
-                        <dl>
-                          <dt className="text-sm font-medium text-gray-500 truncate">
-                            Indian Market Indices
-                          </dt>
-                          <dd>
-                            <div className="text-lg font-medium text-gray-900">
-                              {new Date().toLocaleDateString('en-US', { 
-                                weekday: 'long', 
-                                year: 'numeric', 
-                                month: 'long', 
-                                day: 'numeric' 
-                              })}
-                            </div>
-                          </dd>
-                        </dl>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 px-4 py-4 sm:px-6">
-                    <div className="flow-root">
-                      <ul className="-my-4 divide-y divide-gray-200">
-                        {indianIndices.map((index) => (
-                          <li key={index.name} className="py-4">
-                            <div className="flex items-center justify-between">
-                              <p className="text-sm font-medium text-gray-900">{index.name}</p>
-                              <div className="flex items-center">
-                                <p className="text-sm font-medium text-gray-900 mr-2">
-                                  {index.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </p>
-                                <div className={`flex items-center ${
-                                  index.change >= 0 ? 'text-green-600' : 'text-red-600'
-                                }`}>
-                                  {index.change >= 0 ? (
-                                    <ArrowUp className="h-4 w-4" />
-                                  ) : (
-                                    <ArrowDown className="h-4 w-4" />
-                                  )}
-                                  <span className="text-sm ml-1">
-                                    {Math.abs(index.change).toFixed(2)} ({Math.abs(index.changePercent).toFixed(2)}%)
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
+            {/* Stocks Section */}
+            <div className="mb-8">
+              <div className="flex items-center mb-4">
+                <TrendingUp className="h-5 w-5 text-indigo-600 mr-2" />
+                <h2 className="text-xl font-semibold text-gray-900">Stocks</h2>
               </div>
-
-              {/* Top Gainers and Losers */}
-              <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
-                {/* Top Gainers */}
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
-                      <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
-                      Top Gainers
-                    </h3>
-                  </div>
-                  <div className="border-t border-gray-200">
-                    <div className="px-4 py-5 sm:p-6">
-                      <div className="flow-root">
-                        <ul className="-my-4 divide-y divide-gray-200">
-                          {topGainers.map((stock) => (
-                            <li key={stock.symbol} className="py-4">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-sm font-medium text-gray-900">{stock.symbol}</p>
-                                  <p className="text-sm text-gray-500">{stock.name}</p>
-                                </div>
-                                <div className="flex items-center">
-                                  <p className="text-sm font-medium text-gray-900 mr-2">
-                                    ${stock.price.toFixed(2)}
-                                  </p>
-                                  <div className="flex items-center text-green-600">
-                                    <ArrowUp className="h-4 w-4" />
-                                    <span className="text-sm ml-1">
-                                      {stock.change.toFixed(1)}%
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Top Losers */}
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
-                      <TrendingDown className="h-5 w-5 text-red-500 mr-2" />
-                      Top Losers
-                    </h3>
-                  </div>
-                  <div className="border-t border-gray-200">
-                    <div className="px-4 py-5 sm:p-6">
-                      <div className="flow-root">
-                        <ul className="-my-4 divide-y divide-gray-200">
-                          {topLosers.map((stock) => (
-                            <li key={stock.symbol} className="py-4">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-sm font-medium text-gray-900">{stock.symbol}</p>
-                                  <p className="text-sm text-gray-500">{stock.name}</p>
-                                </div>
-                                <div className="flex items-center">
-                                  <p className="text-sm font-medium text-gray-900 mr-2">
-                                    ${stock.price.toFixed(2)}
-                                  </p>
-                                  <div className="flex items-center text-red-600">
-                                    <ArrowDown className="h-4 w-4" />
-                                    <span className="text-sm ml-1">
-                                      {Math.abs(stock.change).toFixed(1)}%
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Market News */}
-              <div className="mt-5">
-                <div className="bg-white shadow rounded-lg">
-                  <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">Latest Market News</h3>
-                  </div>
-                  <div className="border-t border-gray-200">
-                    <ul className="divide-y divide-gray-200">
-                      {news.map((item) => (
-                        <li key={item.id} className="px-4 py-4 sm:px-6">
-                          <div className="flex items-start space-x-4">
-                            {item.image && (
-                              <div className="flex-shrink-0">
-                                <img className="h-20 w-20 rounded-md object-cover" src={item.image} alt="" />
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <h4 className="text-base font-medium text-gray-900 truncate">{item.title}</h4>
-                              <div className="mt-1 flex items-center text-sm text-gray-500">
-                                <span className="truncate">{item.source}</span>
-                                <span className="mx-1">&middot;</span>
-                                <Clock className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
-                                <span>{item.date}</span>
-                              </div>
-                              <p className="mt-1 text-sm text-gray-600 line-clamp-2">{item.summary}</p>
-                              <div className="mt-2">
-                                <a href={item.url} className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-                                  Read full story
-                                </a>
-                              </div>
+              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Change</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">% Change</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {loading.stocks ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-4 text-center">
+                            <div className="flex justify-center">
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
                             </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Add Cryptocurrency Section */}
-              <div className="mt-5">
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="px-4 py-5 sm:p-6">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 bg-yellow-500 rounded-md p-3">
-                        <Bitcoin className="h-6 w-6 text-white" />
-                      </div>
-                      <div className="ml-5 w-0 flex-1">
-                        <dl>
-                          <dt className="text-sm font-medium text-gray-500 truncate">
-                            Cryptocurrency Market
-                          </dt>
-                          <dd>
-                            <div className="text-lg font-medium text-gray-900">
-                              Top 10 by Market Cap
-                            </div>
-                          </dd>
-                        </dl>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {cryptoLoading ? (
-                    <div className="px-4 py-5 sm:p-6 flex justify-center">
-                      <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Coin
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Price
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              24h Change
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Market Cap
-                            </th>
+                          </td>
+                        </tr>
+                      ) : stocks.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                            No stock data available
+                          </td>
+                        </tr>
+                      ) : (
+                        stocks.map((stock) => (
+                          <tr key={stock.symbol} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{stock.symbol}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{stock.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">${stock.price.toFixed(2)}</td>
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm text-right ${stock.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}
+                            </td>
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm text-right ${stock.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {cryptoData.map((crypto) => (
-                            <tr key={crypto.id}>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                  <div className="flex-shrink-0 h-10 w-10">
-                                    <img className="h-10 w-10 rounded-full" src={crypto.image} alt={crypto.name} />
-                                  </div>
-                                  <div className="ml-4">
-                                    <div className="text-sm font-medium text-gray-900">
-                                      {crypto.name}
-                                    </div>
-                                    <div className="text-sm text-gray-500">
-                                      {crypto.symbol.toUpperCase()}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                ${crypto.current_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <span className={crypto.price_change_percentage_24h >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                  {crypto.price_change_percentage_24h >= 0 ? (
-                                    <ArrowUp className="inline h-4 w-4 mr-1" />
-                                  ) : (
-                                    <ArrowDown className="inline h-4 w-4 mr-1" />
-                                  )}
-                                  {Math.abs(crypto.price_change_percentage_24h).toFixed(2)}%
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500">
-                                ${(crypto.market_cap / 1000000000).toFixed(2)}B
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            
+            {/* Crypto Section */}
+            <div className="mb-8">
+              <div className="flex items-center mb-4">
+                <Bitcoin className="h-5 w-5 text-indigo-600 mr-2" />
+                <h2 className="text-xl font-semibold text-gray-900">Cryptocurrencies</h2>
+              </div>
+              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Change</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">% Change</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Market Cap (B)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {loading.crypto ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-4 text-center">
+                            <div className="flex justify-center">
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : crypto.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                            No cryptocurrency data available
+                          </td>
+                        </tr>
+                      ) : (
+                        crypto.map((coin) => (
+                          <tr key={coin.symbol} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{coin.symbol}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{coin.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">${coin.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm text-right ${coin.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {coin.change >= 0 ? '+' : ''}${Math.abs(coin.change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm text-right ${coin.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {coin.changePercent >= 0 ? '+' : ''}{coin.changePercent.toFixed(2)}%
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">${coin.marketCap.toFixed(1)}B</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            
+            {/* Financial News */}
+            <div className="mb-8">
+              <div className="flex items-center mb-4">
+                <Newspaper className="h-5 w-5 text-indigo-600 mr-2" />
+                <h2 className="text-xl font-semibold text-gray-900">Financial News</h2>
+              </div>
+              {loading.news ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                </div>
+              ) : news.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
+                  No financial news available
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {news.map((item) => (
+                    <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+                      {item.imageUrl && (
+                        <img src={item.imageUrl} alt={item.title} className="w-full h-40 object-cover" />
+                      )}
+                      <div className="p-4">
+                        <h3 className="font-semibold text-lg mb-2">{item.title}</h3>
+                        <p className="text-gray-600 text-sm mb-3">{item.summary}</p>
+                        <div className="flex justify-between items-center text-xs text-gray-500">
+                          <span>{item.source}</span>
+                          <span>{new Date(item.date).toLocaleDateString()}</span>
+                        </div>
+                        <a 
+                          href={item.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-block text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                        >
+                          Read more →
+                        </a>
+                      </div>
                     </div>
-                  )}
-                  <div className="bg-gray-50 px-4 py-3 sm:px-6 text-xs text-gray-500">
-                    Data provided by CoinGecko API
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Market Trends Analysis */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center mb-4">
+                <TrendingUp className="h-5 w-5 text-indigo-600 mr-2" />
+                <h2 className="text-xl font-semibold text-gray-900">Market Trends Analysis</h2>
+              </div>
+              
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Sector Performance</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                      <span className="text-gray-700">Technology</span>
+                      <span className="text-green-600">+2.4%</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                      <span className="text-gray-700">Healthcare</span>
+                      <span className="text-green-600">+1.2%</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                      <span className="text-gray-700">Financials</span>
+                      <span className="text-red-600">-0.8%</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                      <span className="text-gray-700">Energy</span>
+                      <span className="text-red-600">-1.5%</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                      <span className="text-gray-700">Consumer Staples</span>
+                      <span className="text-green-600">+0.3%</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                      <span className="text-gray-700">Utilities</span>
+                      <span className="text-green-600">+0.7%</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">AI Market Analysis</h3>
+                  <div className="bg-gray-50 p-4 rounded-md">
+                    <p className="text-gray-700 mb-3">
+                      Based on current market conditions, our AI analysis suggests a cautiously optimistic outlook for the next quarter. 
+                      Technology and healthcare sectors show strong momentum, while energy stocks face headwinds due to commodity price fluctuations.
+                    </p>
+                    <p className="text-gray-700">
+                      Inflation concerns are moderating, and the Federal Reserve's recent comments suggest a potential shift toward more accommodative policy. 
+                      This environment typically favors growth stocks and could provide tailwinds for the broader market.
+                    </p>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Economic Indicators</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 p-3 rounded-md">
+                      <p className="text-sm text-gray-500">Inflation (CPI)</p>
+                      <p className="text-xl font-semibold text-gray-900">3.2%</p>
+                      <p className="text-xs text-gray-500">Year-over-year</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-md">
+                      <p className="text-sm text-gray-500">Unemployment Rate</p>
+                      <p className="text-xl font-semibold text-gray-900">3.8%</p>
+                      <p className="text-xs text-gray-500">Current</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-md">
+                      <p className="text-sm text-gray-500">GDP Growth</p>
+                      <p className="text-xl font-semibold text-gray-900">2.1%</p>
+                      <p className="text-xs text-gray-500">Quarterly</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-md">
+                      <p className="text-sm text-gray-500">Fed Funds Rate</p>
+                      <p className="text-xl font-semibold text-gray-900">5.25%</p>
+                      <p className="text-xs text-gray-500">Current target</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </main>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
+
+export default Dashboard;
