@@ -7,4 +7,15 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    outDir: 'dist',
+    // Ensure assets are copied
+    assetsDir: 'assets',
+    // Generate a _redirects file in the build output
+    rollupOptions: {
+      output: {
+        assetFileNames: 'assets/[name].[ext]'
+      }
+    }
+  }
 });

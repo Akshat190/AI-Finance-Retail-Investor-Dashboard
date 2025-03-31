@@ -27,6 +27,11 @@ import PortfolioManager from '../components/PortfolioManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Pie } from 'react-chartjs-2';
+
+// Register Chart.js components
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface MarketIndex {
   name: string;
@@ -82,6 +87,13 @@ interface NewsItem {
   imageUrl?: string;
 }
 
+// Asset allocation data
+interface AssetAllocation {
+  label: string;
+  value: number;
+  color: string;
+}
+
 export const Dashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -101,7 +113,51 @@ export const Dashboard = () => {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [crypto, setCrypto] = useState<Crypto[]>([]);
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
+  const [assetAllocation, setAssetAllocation] = useState<AssetAllocation[]>([
+    { label: 'Stocks', value: 65, color: '#6366F1' }, // Indigo
+    { label: 'Bonds', value: 20, color: '#10B981' },  // Green
+    { label: 'Crypto', value: 10, color: '#F59E0B' }, // Yellow/Amber
+    { label: 'Cash', value: 5, color: '#6B7280' }     // Gray
+  ]);
 
+  // Prepare chart data
+  const pieChartData = {
+    labels: assetAllocation.map(asset => asset.label),
+    datasets: [
+      {
+        data: assetAllocation.map(asset => asset.value),
+        backgroundColor: assetAllocation.map(asset => asset.color),
+        borderColor: assetAllocation.map(asset => asset.color),
+        borderWidth: 1,
+      },
+    ],
+  };
+  
+  // Chart options
+  const pieChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: {
+          usePointStyle: true,
+          padding: 20,
+          font: {
+            size: 12
+          }
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            return `${context.label}: ${context.raw}%`;
+          }
+        }
+      }
+    },
+  };
+  
   useEffect(() => {
     loadDashboardData();
     fetchCryptoData();
@@ -383,35 +439,8 @@ export const Dashboard = () => {
             <h2 className="text-lg font-semibold text-gray-900">Asset Allocation</h2>
             <PieChart className="h-5 w-5 text-indigo-600" />
           </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <div>
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-indigo-500 rounded-full mr-2"></div>
-                <span className="text-sm text-gray-600">Stocks</span>
-              </div>
-              <p className="text-lg font-semibold">65%</p>
-            </div>
-            <div>
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                <span className="text-sm text-gray-600">Bonds</span>
-              </div>
-              <p className="text-lg font-semibold">20%</p>
-            </div>
-            <div>
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
-                <span className="text-sm text-gray-600">Crypto</span>
-              </div>
-              <p className="text-lg font-semibold">10%</p>
-            </div>
-            <div>
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-gray-500 rounded-full mr-2"></div>
-                <span className="text-sm text-gray-600">Cash</span>
-              </div>
-              <p className="text-lg font-semibold">5%</p>
-            </div>
+          <div className="h-48 mt-2">
+            <Pie data={pieChartData} options={pieChartOptions} />
           </div>
         </div>
         
