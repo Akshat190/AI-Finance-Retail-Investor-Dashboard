@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build &&  move public\\_redirects dist\\",
+    "build": "vite build && (if exist public\\_redirects move public\\_redirects dist\\ || echo No _redirects file found)",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -1226,7 +1226,7 @@ function Portfolio() {
                       </span>
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-center space-x-2">
+                      <div className="flex flex-wrap justify-center gap-2">
                           <button
                           onClick={() => handleInitiateSell(stock)}
                           className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 dark:bg-red-800 dark:text-red-100 dark:hover:bg-red-700"
@@ -1241,7 +1241,7 @@ function Portfolio() {
                         </button>
                           <button
                             onClick={() => handleGeneratePrediction(stock)}
-                          className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 dark:bg-blue-800 dark:text-blue-100 dark:hover:bg-blue-700 hidden sm:block"
+                          className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 dark:bg-blue-800 dark:text-blue-100 dark:hover:bg-blue-700"
                           >
                           {predictionLoading ? 'Loading...' : 'Predict'}
                           </button>
@@ -1258,9 +1258,9 @@ function Portfolio() {
       {/* Stock Predictions */}
       <div id="predictions-section" className="mt-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <h2 className="text-2xl font-semibold">AI Stock Predictions</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold">AI Stock Predictions</h2>
           
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             {predictions.length > 1 && (
               <div className="flex items-center gap-2">
                 <label htmlFor="sort-predictions" className="text-sm text-gray-500 dark:text-gray-400">
@@ -1280,7 +1280,7 @@ function Portfolio() {
               </div>
             )}
             
-      {predictions.length > 0 && (
+            {predictions.length > 0 && (
               <button
                 onClick={() => setPredictions([])}
                 className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-md transition-colors"
@@ -1302,7 +1302,7 @@ function Portfolio() {
                     : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
                 }`}
               >
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                   <div>
                     <h3 className="text-lg font-bold">{prediction.symbol}</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[200px]">{prediction.name}</p>
@@ -1313,61 +1313,61 @@ function Portfolio() {
                         New
                       </span>
                     )}
-                  <button
-                    onClick={() => {
+                    <button
+                      onClick={() => {
                         setPredictions(predictions.filter((_, i) => i !== index));
-                    }}
+                      }}
                       className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  >
+                    >
                       <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                </div>
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
                   </div>
-                  
+                </div>
+                
                 <div className="grid grid-cols-2 gap-4 mb-3">
                   <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Current Price</p>
                     <p className="text-lg font-semibold">${typeof prediction.currentPrice === 'number' ? Number(prediction.currentPrice).toFixed(2) : 'N/A'}</p>
-                      </div>
+                  </div>
                   <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Prediction (1 Year)</p>
                     <p className="text-lg font-semibold">${typeof prediction.prediction === 'number' ? Number(prediction.prediction).toFixed(2) : 'N/A'}</p>
-                    </div>
+                  </div>
                 </div>
-                  
+                
                 <div className="grid grid-cols-2 gap-4 mb-3">
-                    <div>
+                  <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Confidence</p>
                     <p className="text-lg font-semibold">{typeof prediction.confidence === 'number' ? Math.round(prediction.confidence) + '%' : 'N/A'}</p>
-                    </div>
-                    <div>
+                  </div>
+                  <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Projected Change</p>
                     <p className={`text-lg font-semibold ${typeof prediction.changePercent === 'number' && prediction.changePercent > 0 ? 'text-green-600 dark:text-green-400' : typeof prediction.changePercent === 'number' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
                       {typeof prediction.changePercent === 'number' ? (prediction.changePercent > 0 ? '+' : '') + prediction.changePercent.toFixed(1) + '%' : 'N/A'}
-                      </p>
-                    </div>
-                    </div>
+                    </p>
+                  </div>
+                </div>
                 
                 <div className="mt-4 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-md">
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">AI Analysis</p>
                   <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 hover:line-clamp-none transition-all">{prediction.analysis}</p>
-                  </div>
-                  
+                </div>
+                
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   <div className="col-span-1">
                     <p className="text-xs text-gray-500 dark:text-gray-400">1M</p>
                     <p className={`text-sm font-medium ${typeof prediction.oneMonth === 'number' && prediction.oneMonth > 0 ? 'text-green-600 dark:text-green-400' : typeof prediction.oneMonth === 'number' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
                       {typeof prediction.oneMonth === 'number' ? (prediction.oneMonth > 0 ? '+' : '') + prediction.oneMonth.toFixed(1) + '%' : 'N/A'}
                     </p>
-                      </div>
+                  </div>
                   <div className="col-span-1">
                     <p className="text-xs text-gray-500 dark:text-gray-400">6M</p>
                     <p className={`text-sm font-medium ${typeof prediction.sixMonths === 'number' && prediction.sixMonths > 0 ? 'text-green-600 dark:text-green-400' : typeof prediction.sixMonths === 'number' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
                       {typeof prediction.sixMonths === 'number' ? (prediction.sixMonths > 0 ? '+' : '') + prediction.sixMonths.toFixed(1) + '%' : 'N/A'}
                     </p>
-                    </div>
+                  </div>
                   <div className="col-span-1">
                     <p className="text-xs text-gray-500 dark:text-gray-400">5Y</p>
                     <p className={`text-sm font-medium ${typeof prediction.fiveYear === 'number' && prediction.fiveYear > 0 ? 'text-green-600 dark:text-green-400' : typeof prediction.fiveYear === 'number' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
@@ -1383,8 +1383,8 @@ function Portfolio() {
             <p className="text-gray-500 dark:text-gray-400">
               No predictions generated yet. Click the "Predict" button on any stock to see AI-powered price predictions.
             </p>
-        </div>
-      )}
+          </div>
+        )}
       </div>
       
       {/* Buy Stock Modal */}
