@@ -1,30 +1,35 @@
-export type AIProvider = 'gemini' | 'openrouter';
-
 export interface AIConfig {
-  provider: AIProvider;
+  provider: string;
+  model: string;
   apiKey: string;
-  modelName: string;
-  baseUrl?: string;
+  apiUrl: string;
+  headers: Record<string, string>;
 }
 
-// Default configurations for each provider
-export const defaultConfigs: Record<AIProvider, Omit<AIConfig, 'apiKey'>> = {
-  gemini: {
-    provider: 'gemini',
-    modelName: 'gemini-2.0-flash',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta'
-  },
-  openrouter: {
-    provider: 'openrouter',
-    modelName: 'deepseek/deepseek-r1:free',
-    baseUrl: 'https://openrouter.ai/api/v1'
+export function getAIConfig(provider: string, apiKey: string): AIConfig {
+  if (provider === 'gemini') {
+    return {
+      provider: 'gemini',
+      model: 'gemini-pro',
+      apiKey,
+      apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    };
+  } else {
+    // OpenRouter configuration
+    return {
+      provider: 'openrouter',
+      model: 'qwen/qwen2.5-vl-3b-instruct:free', // Using the specified model
+      apiKey,
+      apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'Finance Portfolio App',
+        'Content-Type': 'application/json'
+      }
+    };
   }
-};
-
-// Get configuration with API key
-export function getAIConfig(provider: AIProvider, apiKey: string): AIConfig {
-  return {
-    ...defaultConfigs[provider],
-    apiKey
-  };
 } 

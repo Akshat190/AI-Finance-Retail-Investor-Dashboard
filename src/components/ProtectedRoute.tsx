@@ -1,27 +1,42 @@
-import React from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Loader } from './Loader';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, loading } = useAuth();
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { user, loading, tokenExpired, refreshToken } = useAuth();
+  const location = useLocation();
 
+  useEffect(() => {
+    // Attempt to refresh token on route change if user is logged in
+    if (user && !loading) {
+      refreshToken();
+    }
+  }, [location.pathname, user]);
+
+  // If authentication is still loading, show loading spinner
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader size="large" />
       </div>
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
+  // If token is expired, redirect to login
+  if (tokenExpired) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  return <>{children}</>;
-};
+  // If user is not logged in, redirect to login page
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
-export default ProtectedRoute; 
+  // If user is authenticated, render the children components
+  return <>{children}</>;
+}; 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { RefreshCw, PlusCircle, Loader2 } from 'lucide-react';
+import { RefreshCw, PlusCircle, Loader2, Search } from 'lucide-react';
 import { 
   availableStocks, 
   safeNumber, 
@@ -10,6 +10,7 @@ import {
 } from '../utils/stockPredictions';
 import { supabase } from '../utils/supabaseClient';
 import { getStockQuote } from '../utils/fmpApi';
+import { toast } from 'react-hot-toast';
 
 // Define the component
 function Portfolio() {
@@ -22,30 +23,65 @@ function Portfolio() {
   const [user, setUser] = useState<any>(null);
   
   // State for stocks and predictions
-  const [stocks, setStocks] = useState<any[]>([]);
+  const [stocks, setStocks] = useState<any[]>([
+    {
+      id: '1',
+      userId: user?.id || 'demo-user',
+      symbol: 'AAPL',
+      name: 'Apple Inc.',
+      shares: 10,
+      purchasePrice: 150.25,
+      currentPrice: 165.30,
+      purchaseDate: new Date().toISOString(),
+      sector: 'Technology',
+      country: 'USA',
+    },
+    {
+      id: '2',
+      userId: user?.id || 'demo-user',
+      symbol: 'MSFT',
+      name: 'Microsoft Corporation',
+      shares: 5,
+      purchasePrice: 240.50,
+      currentPrice: 252.75,
+      purchaseDate: new Date().toISOString(),
+      sector: 'Technology',
+      country: 'USA',
+    },
+    {
+      id: '3',
+      userId: user?.id || 'demo-user',
+      symbol: 'GOOG',
+      name: 'Alphabet Inc.',
+      shares: 2,
+      purchasePrice: 2100.75,
+      currentPrice: 2230.20,
+      purchaseDate: new Date().toISOString(),
+      sector: 'Technology',
+      country: 'USA',
+    },
+  ]);
   const [predictions, setPredictions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [predictionLoading, setPredictionLoading] = useState(false);
   
+  // Add portfolio history tracking
+  const [portfolioHistory, setPortfolioHistory] = useState<{
+    date: string;
+    value: number;
+    change: number;
+    transaction: string;
+  }[]>([]);
+  
   // State for buy form
   const [showBuyForm, setShowBuyForm] = useState(false);
-  const [buyStock, setBuyStock] = useState<{
-    symbol: string;
-    name: string;
-    shares: number;
-    price: number;
-    sector: string;
-    country: string;
-    predictionYears: number;
-    isProcessing: boolean;
-  }>({
+  const [buyFormData, setBuyFormData] = useState({
     symbol: '',
     name: '',
     shares: 1,
     price: 0,
     sector: '',
     country: '',
-    predictionYears: 5,
     isProcessing: false
   });
   
@@ -57,9 +93,28 @@ function Portfolio() {
   // State for tracking if default stocks have been loaded
   const [defaultStocksLoaded, setDefaultStocksLoaded] = useState(false);
   
+  // Add state for sorting predictions
+  const [predictionSortBy, setPredictionSortBy] = useState<'newest' | 'name' | 'change' | 'confidence'>('newest');
+  
   // Add state for multi-buy mode
   const [multiBuyMode, setMultiBuyMode] = useState(false);
   const [selectedStocks, setSelectedStocks] = useState<any[]>([]);
+  
+  // State for sell form
+  const [showSellForm, setShowSellForm] = useState(false);
+  const [sellFormData, setSellFormData] = useState({
+    id: '',
+    symbol: '',
+    name: '',
+    shares: 1,
+    maxShares: 0,
+    price: 0,
+    currentValue: 0,
+    isProcessing: false
+  });
+  
+  // State for portfolio total value
+  const [portfolioTotalValue, setPortfolioTotalValue] = useState(0);
   
   // Fetch stocks from database
   const fetchStocks = async () => {
@@ -306,6 +361,9 @@ function Portfolio() {
       // Generate a prediction for the stock
       const prediction = await generatePrediction(stock);
       
+      // Mark this prediction as new to highlight it
+      prediction.isNew = true;
+      
       // Check if we already have a prediction for this stock
       const existingPredictionIndex = predictions.findIndex(p => p.symbol === stock.symbol);
       
@@ -319,40 +377,140 @@ function Portfolio() {
         setPredictions([prediction, ...predictions]);
       }
       
-      // Show success message
-      alert(`Prediction generated for ${stock.symbol}`);
+      // Show success message with toast instead of alert
+      toast.success(`Prediction generated for ${stock.symbol}`, {
+        position: "top-right",
+        duration: 3000
+      });
+      
+      // Scroll to predictions section
+      setTimeout(() => {
+        const predictionsSection = document.getElementById('predictions-section');
+        if (predictionsSection) {
+          predictionsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+      
+      // Remove the highlight effect after 5 seconds
+      setTimeout(() => {
+        setPredictions(prev => 
+          prev.map(p => 
+            p.symbol === prediction.symbol 
+              ? { ...p, isNew: false } 
+              : p
+          )
+        );
+      }, 5000);
     } catch (error) {
       console.error('Error generating prediction:', error);
-      alert('Failed to generate prediction. Please try again.');
+      // Show error with toast instead of alert
+      toast.error('Failed to generate prediction. Please try again.', {
+        position: "top-right",
+        duration: 3000
+      });
     } finally {
       setPredictionLoading(false);
     }
   };
   
-  // Handle search input change
+  // Handle searching for stocks
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchQuery(query);
     
     if (query.trim() === '') {
-      // Show popular stocks when query is empty
-      setSearchResults(availableStocks.slice(0, 10).map(stock => ({
+      // Show portfolio stocks and popular stocks when query is empty
+      const portfolioStocks = stocks.map(stock => ({
+        ...stock,
+        inPortfolio: true
+      }));
+      
+      const popularUSStocks = availableStocks
+        .filter(stock => !stock.symbol.endsWith('.NS'))
+        .slice(0, 8)
+        .map(stock => ({
         ...stock,
         inPortfolio: stocks.some(s => s.symbol === stock.symbol)
-      })));
+        }));
+      
+      const popularIndianStocks = availableStocks
+        .filter(stock => stock.symbol.endsWith('.NS'))
+        .slice(0, 4)
+        .map(stock => ({
+          ...stock,
+          inPortfolio: stocks.some(s => s.symbol === stock.symbol)
+        }));
+      
+      // Set search results with portfolio stocks first, then popular stocks
+      setSearchResults([...portfolioStocks, ...popularUSStocks, ...popularIndianStocks].slice(0, 20));
+      setSearchFocused(true);
       return;
     }
     
-    // Search for stocks
-    const results = searchStock(query);
+    // First search in our local data
+    const lowerQuery = query.toLowerCase();
     
-    // Add a flag to indicate if the stock is already in the portfolio
-    const resultsWithPortfolioFlag = results.map(stock => ({
+    // Check portfolio stocks first
+    const portfolioMatches = stocks
+      .filter(stock => 
+        stock.symbol.toLowerCase().includes(lowerQuery) || 
+        stock.name.toLowerCase().includes(lowerQuery)
+      )
+      .map(stock => ({
+        ...stock,
+        inPortfolio: true
+      }));
+    
+    // Then check available stocks
+    const availableMatches = availableStocks
+      .filter(stock => 
+        stock.symbol.toLowerCase().includes(lowerQuery) || 
+        stock.name.toLowerCase().includes(lowerQuery)
+      )
+      .map(stock => ({
       ...stock,
       inPortfolio: stocks.some(s => s.symbol === stock.symbol)
     }));
     
-    setSearchResults(resultsWithPortfolioFlag);
+    // Combine results, ensuring no duplicates
+    const combinedResults = [...portfolioMatches];
+    
+    availableMatches.forEach(match => {
+      if (!combinedResults.some(s => s.symbol === match.symbol)) {
+        combinedResults.push(match);
+      }
+    });
+    
+    setSearchResults(combinedResults.slice(0, 20));
+    setSearchFocused(true);
+    
+    // If we have few results, try the API search
+    if (combinedResults.length < 5 && query.length >= 2) {
+      // API search is asynchronous, so we'll update results when it's done
+      searchStock(query)
+        .then(apiResults => {
+          if (apiResults && apiResults.length > 0) {
+            const enhancedApiResults = apiResults.map(stock => ({
+              ...stock,
+              inPortfolio: stocks.some(s => s.symbol === stock.symbol)
+            }));
+            
+            // Combine with our existing results, avoiding duplicates
+            const newResults = [...combinedResults];
+            
+            enhancedApiResults.forEach(apiStock => {
+              if (!newResults.some(s => s.symbol === apiStock.symbol)) {
+                newResults.push(apiStock);
+              }
+            });
+            
+            setSearchResults(newResults.slice(0, 20));
+          }
+        })
+        .catch(err => {
+          console.error("Error searching stocks via API:", err);
+        });
+    }
   };
   
   // Handle search focus
@@ -416,59 +574,105 @@ function Portfolio() {
     // Check if the stock is already in the portfolio
     const existingStock = stocks.find(s => s.symbol === stock.symbol);
     
-    setBuyStock({
+    setBuyFormData({
       symbol: stock.symbol,
       name: stock.name,
       shares: 1,
       price: stock.price || stock.current_price || 0,
       sector: stock.sector || '',
       country: stock.country || (stock.symbol.endsWith('.NS') ? 'India' : 'US'),
-      predictionYears: 5,
-      isProcessing: false
     });
     
     // Close the search dropdown
     setSearchFocused(false);
   };
   
-  // Handle buying a stock - completely rewritten for reliability
+  // Function to recalculate portfolio metrics
+  const recalculatePortfolioMetrics = (updatedStocks: any[]) => {
+    // Calculate new portfolio value and gain/loss
+    const newPortfolioValue = updatedStocks.reduce((total, stock) => {
+      const currentPrice = typeof stock.current_price === 'number' ? stock.current_price : 
+                          (typeof stock.currentPrice === 'number' ? stock.currentPrice : 0);
+      const shares = typeof stock.shares === 'number' ? stock.shares : 0;
+      return total + (currentPrice * shares);
+    }, 0);
+    
+    const newPortfolioCost = updatedStocks.reduce((total, stock) => {
+      const purchasePrice = typeof stock.purchase_price === 'number' ? stock.purchase_price : 
+                          (typeof stock.purchasePrice === 'number' ? stock.purchasePrice : 0);
+      const shares = typeof stock.shares === 'number' ? stock.shares : 0;
+      return total + (purchasePrice * shares);
+    }, 0);
+    
+    const newPortfolioGainLoss = newPortfolioValue - newPortfolioCost;
+    const newPortfolioGainLossPercent = newPortfolioCost > 0 ? (newPortfolioGainLoss / newPortfolioCost) * 100 : 0;
+    
+    // Add to portfolio history
+    const currentDate = new Date().toISOString();
+    setPortfolioHistory(prev => [
+      ...prev,
+      {
+        date: currentDate,
+        value: newPortfolioValue,
+        change: newPortfolioValue - (prev.length > 0 ? prev[0].value : 0),
+        transaction: 'update'
+      }
+    ]);
+    
+    return {
+      portfolioValue: newPortfolioValue,
+      portfolioCost: newPortfolioCost,
+      portfolioGainLoss: newPortfolioGainLoss,
+      portfolioGainLossPercent: newPortfolioGainLossPercent
+    };
+  };
+  
+  // Handle buying a stock - simplified for reliability
   const handleBuyStock = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Buying stock:", buyFormData.symbol, buyFormData.shares, "shares");
     
-    if (!buyStock.symbol || buyStock.shares < 1) {
-      alert("Please select a stock and specify at least 1 share to buy");
+    if (!buyFormData.symbol || buyFormData.shares < 1) {
+      toast.error("Please select a stock and specify at least 1 share to buy");
       return;
     }
     
     try {
       // Set processing state
-      setBuyStock({...buyStock, isProcessing: true});
+      setBuyFormData({...buyFormData, isProcessing: true});
+      
+      // Simulate a slight delay for processing
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Create a new stock object with all required fields
       const newStock = {
         id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Generate a unique ID
         user_id: user ? user.id : 'default-user',
-        symbol: buyStock.symbol,
-        name: buyStock.name,
-        shares: buyStock.shares,
-        purchase_price: buyStock.price,
-        current_price: buyStock.price,
+        symbol: buyFormData.symbol,
+        name: buyFormData.name,
+        shares: buyFormData.shares,
+        purchase_price: buyFormData.price,
+        current_price: buyFormData.price,
         purchase_date: new Date().toISOString().split('T')[0],
-        sector: buyStock.sector || '',
-        country: buyStock.country || (buyStock.symbol.endsWith('.NS') ? 'India' : 'US')
+        sector: buyFormData.sector || '',
+        country: buyFormData.country || (buyFormData.symbol.endsWith('.NS') ? 'India' : 'US')
       };
       
       console.log("Adding new stock to portfolio:", newStock);
       
+      // Calculate purchase amount
+      const purchaseAmount = buyFormData.price * buyFormData.shares;
+      
       // Add to local state first for immediate feedback
+      let updatedStocks: any[] = [];
       setStocks(prevStocks => {
         // Check if stock already exists in portfolio
         const existingStockIndex = prevStocks.findIndex(s => s.symbol === newStock.symbol);
         
         if (existingStockIndex >= 0) {
           // Update existing stock by adding shares
-          const updatedStocks = [...prevStocks];
-          const existingStock = updatedStocks[existingStockIndex];
+          const newStocks = [...prevStocks];
+          const existingStock = newStocks[existingStockIndex];
           
           // Calculate new average purchase price
           const totalShares = existingStock.shares + newStock.shares;
@@ -476,376 +680,293 @@ function Portfolio() {
                             (newStock.shares * newStock.purchase_price);
           const averagePrice = totalValue / totalShares;
           
-          updatedStocks[existingStockIndex] = {
+          newStocks[existingStockIndex] = {
             ...existingStock,
             shares: totalShares,
             purchase_price: averagePrice
           };
           
-          return updatedStocks;
+          updatedStocks = newStocks;
+          return newStocks;
         } else {
           // Add new stock
-          return [...prevStocks, newStock];
+          updatedStocks = [...prevStocks, newStock];
+          return updatedStocks;
         }
       });
       
-      // If user is logged in, update database
-      if (user) {
-        try {
-          // Check if stock already exists in database
-          const { data: existingData, error: fetchError } = await supabase
-            .from('portfolio')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('symbol', buyStock.symbol);
-          
-          if (fetchError) {
-            throw fetchError;
-          }
-          
-          if (existingData && existingData.length > 0) {
-            // Update existing stock
-            const existingStock = existingData[0];
-            
-            // Calculate new average purchase price
-            const totalShares = existingStock.shares + buyStock.shares;
-            const totalValue = (existingStock.shares * existingStock.purchase_price) + 
-                              (buyStock.shares * buyStock.price);
-            const averagePrice = totalValue / totalShares;
-            
-            const { error: updateError } = await supabase
-              .from('portfolio')
-              .update({
-                shares: totalShares,
-                purchase_price: averagePrice,
-                current_price: buyStock.price // Update current price
-              })
-              .eq('id', existingStock.id);
-            
-            if (updateError) {
-              throw updateError;
-            }
-          } else {
-            // Insert new stock
-            const { error: insertError } = await supabase
-              .from('portfolio')
-              .insert([{
-                user_id: user.id,
-                symbol: buyStock.symbol,
-                name: buyStock.name,
-                shares: buyStock.shares,
-                purchase_price: buyStock.price,
-                current_price: buyStock.price,
-                purchase_date: new Date().toISOString().split('T')[0],
-                sector: buyStock.sector || '',
-                country: buyStock.country || (buyStock.symbol.endsWith('.NS') ? 'India' : 'US')
-              }]);
-            
-            if (insertError) {
-              throw insertError;
-            }
-          }
-          
-          // Refresh portfolio data
-          fetchStocks();
-        } catch (dbError) {
-          console.error('Database error:', dbError);
-          alert("Database error occurred, but your purchase was recorded locally");
+      // Update portfolio history with buy transaction
+      setPortfolioHistory(prev => [
+        ...prev,
+        {
+          date: new Date().toISOString(),
+          value: purchaseAmount,
+          change: purchaseAmount,
+          transaction: `BUY: ${buyFormData.shares} shares of ${buyFormData.symbol} at $${typeof buyFormData.price === 'number' ? buyFormData.price.toFixed(2) : '0.00'}`
         }
-      }
+      ]);
       
-      // Generate prediction if requested
-      if (buyStock.predictionYears > 0) {
-        setPredictionLoading(true);
-        
-        try {
-          const prediction = await generateCustomPrediction(
-            buyStock.symbol,
-            buyStock.name,
-            buyStock.price,
-            buyStock.predictionYears
-          );
-          
-          setPredictions(prevPredictions => [...prevPredictions, prediction]);
-          alert(`Generated ${buyStock.predictionYears}-year prediction for ${buyStock.symbol}`);
-        } catch (predictionError) {
-          console.error('Error generating prediction:', predictionError);
-          alert("Could not generate prediction, but your purchase was successful");
-        } finally {
-          setPredictionLoading(false);
-        }
-      }
+      // Recalculate portfolio metrics
+      recalculatePortfolioMetrics(updatedStocks);
       
-      // Show success message
-      alert(`Successfully purchased ${buyStock.shares} shares of ${buyStock.symbol}`);
+      // Show success message with purchase details
+      toast.success(`Successfully purchased ${buyFormData.shares} shares of ${buyFormData.symbol} for $${typeof purchaseAmount === 'number' ? purchaseAmount.toFixed(2) : '0.00'}`);
       
       // Reset form and close modal
       setShowBuyForm(false);
-      setBuyStock({
+      setBuyFormData({
         symbol: '',
         name: '',
         shares: 1,
         price: 0,
         sector: '',
         country: '',
-        predictionYears: 5,
-        isProcessing: false
       });
       setSearchQuery('');
       setSearchResults([]);
     } catch (error) {
       console.error('Error buying stock:', error);
-      alert(`Error purchasing stock: ${error}`);
-      setBuyStock({...buyStock, isProcessing: false});
+      toast.error(`Error purchasing stock: ${error}`);
+      setBuyFormData({...buyFormData, isProcessing: false});
     }
   };
   
-  // Handle selling a stock
-  const sellStock = async (stockId: string) => {
-    try {
-      // Find the stock to sell
-      const stockToSell = stocks.find(stock => stock.id === stockId);
-      
-      if (!stockToSell) {
-        throw new Error('Stock not found');
-      }
-      
-      // Confirm the sale
-      if (!window.confirm(`Are you sure you want to sell ${stockToSell.shares} shares of ${stockToSell.symbol}?`)) {
+  // Handle initiating a sell transaction
+  const handleInitiateSell = (stock: any) => {
+    console.log("Sell initiated for:", stock.symbol);
+    
+    // Set valid price (needed in case current price is 0 or undefined)
+    const currentPrice = stock.currentPrice && stock.currentPrice > 0 ? 
+      stock.currentPrice : 100;
+    
+    setSellFormData({
+      id: stock.id,
+      symbol: stock.symbol,
+      name: stock.name,
+      shares: 1,
+      maxShares: stock.shares,
+      price: currentPrice,
+      currentValue: currentPrice * stock.shares,
+      isProcessing: false
+    });
+    
+    setShowSellForm(true);
+  };
+  
+  // Handle initiating buying more of a stock
+  const handleBuyMore = (stock: any) => {
+    console.log("Buying more of", stock.symbol);
+    // Set the form data
+    setBuyFormData({
+      symbol: stock.symbol,
+      name: stock.name,
+      shares: 1,
+      price: stock.current_price,
+      sector: stock.sector,
+      country: stock.country,
+      isProcessing: false
+    });
+    
+    // Show the buy form
+    setShowBuyForm(true);
+  };
+  
+  // Handle confirming a sell transaction
+  const handleConfirmSell = async () => {
+    console.log("Confirming sell for:", sellFormData.symbol, sellFormData.shares, "shares");
+    
+    if (!sellFormData.id || sellFormData.shares < 1) {
+      toast.error("Please specify at least 1 share to sell");
+      return;
+    }
+    
+    if (sellFormData.shares > sellFormData.maxShares) {
+      toast.error(`You only have ${sellFormData.maxShares} shares available to sell`);
         return;
       }
       
-      // If user is logged in, delete from database
-      if (user) {
-        try {
-          const { error } = await supabase
-            .from('portfolio')
-            .delete()
-            .eq('id', stockId);
-          
-          if (error) {
-            console.error('Error deleting from database:', error);
-            // Continue with local update even if database delete fails
+    try {
+      // Set processing state
+      setSellFormData({...sellFormData, isProcessing: true});
+      
+      // Calculate sale value
+      const saleValue = sellFormData.shares * sellFormData.price;
+      
+      // Simulate a slight delay for processing
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      let updatedStocks: any[] = [];
+      
+      // Check if selling all shares or partial
+      if (sellFormData.shares === sellFormData.maxShares) {
+        // Remove the stock from our local state
+        updatedStocks = stocks.filter(stock => stock.id !== sellFormData.id);
+        setStocks(updatedStocks);
+      } else {
+        // Partial sale - reduce quantity
+        updatedStocks = stocks.map(stock => {
+          if (stock.id === sellFormData.id) {
+            return {
+              ...stock,
+              shares: stock.shares - sellFormData.shares
+            };
           }
-        } catch (dbError) {
-          console.error('Exception deleting from database:', dbError);
-          // Continue with local update
-        }
+          return stock;
+        });
+        setStocks(updatedStocks);
       }
       
-      // Remove the stock from our local state
-      setStocks(stocks.filter(stock => stock.id !== stockId));
+      // Update portfolio history with sell transaction
+      setPortfolioHistory(prev => [
+        ...prev,
+        {
+          date: new Date().toISOString(),
+          value: saleValue,
+          change: saleValue,
+          transaction: `SELL: ${sellFormData.shares} shares of ${sellFormData.symbol} at $${typeof sellFormData.price === 'number' ? sellFormData.price.toFixed(2) : '0.00'}`
+        }
+      ]);
+      
+      // Recalculate portfolio metrics
+      recalculatePortfolioMetrics(updatedStocks);
       
       // Show success message
-      alert(`Successfully sold ${stockToSell.shares} shares of ${stockToSell.symbol}`);
+      toast.success(`Successfully sold ${sellFormData.shares} shares of ${sellFormData.symbol} for $${typeof saleValue === 'number' ? saleValue.toFixed(2) : '0.00'}`);
+      
+      // Reset form and close modal
+      setShowSellForm(false);
+      setSellFormData({
+        id: '',
+        symbol: '',
+        name: '',
+        shares: 1,
+        maxShares: 0,
+        price: 0,
+        currentValue: 0,
+      });
     } catch (error) {
       console.error('Error selling stock:', error);
-      alert('Failed to sell stock. Please try again.');
+      toast.error('Failed to sell stock. Please try again.');
+      setSellFormData({...sellFormData, isProcessing: false});
     }
   };
   
   // Calculate portfolio metrics
   const portfolioValue = stocks.reduce((total, stock) => {
-    return total + (safeNumber(stock.current_price) * safeNumber(stock.shares));
+    const currentPrice = typeof stock.current_price === 'number' ? stock.current_price : 
+                        (typeof stock.currentPrice === 'number' ? stock.currentPrice : 0);
+    const shares = typeof stock.shares === 'number' ? stock.shares : 0;
+    return total + (currentPrice * shares);
   }, 0);
   
   const portfolioCost = stocks.reduce((total, stock) => {
-    return total + (safeNumber(stock.purchase_price) * safeNumber(stock.shares));
+    const purchasePrice = typeof stock.purchase_price === 'number' ? stock.purchase_price : 
+                         (typeof stock.purchasePrice === 'number' ? stock.purchasePrice : 0);
+    const shares = typeof stock.shares === 'number' ? stock.shares : 0;
+    return total + (purchasePrice * shares);
   }, 0);
   
   const portfolioGainLoss = portfolioValue - portfolioCost;
   const portfolioGainLossPercent = portfolioCost > 0 ? (portfolioGainLoss / portfolioCost) * 100 : 0;
   
-  // Group portfolio stocks by sector for the pie chart
-  const sectorData = stocks.reduce((acc: any, stock) => {
-    const sector = stock.sector || 'Other';
-    const value = safeNumber(stock.current_price) * safeNumber(stock.shares);
+  // Calculate portfolio value
+  const setPortfolioValue = () => {
+    // Calculate total value
+    const totalValue = stocks.reduce((total, stock) => {
+      const currentPrice = typeof stock.current_price === 'number' ? stock.current_price : 0;
+      const shares = typeof stock.shares === 'number' ? stock.shares : 0;
+      return total + (shares * currentPrice);
+    }, 0);
     
-    if (!acc[sector]) {
-      acc[sector] = 0;
-    }
-    
-    acc[sector] += value;
-    return acc;
-  }, {});
-  
-  // Convert sector data to array for the chart
-  const sectorChartData = Object.entries(sectorData).map(([name, value]) => ({
-    name,
-    value: Number(value)
-  }));
-  
-  // Handle selecting multiple stocks
-  const handleSelectMultipleStocks = (stock: any) => {
-    const isAlreadySelected = selectedStocks.some(s => s.symbol === stock.symbol);
-    
-    if (isAlreadySelected) {
-      // Remove from selection
-      setSelectedStocks(selectedStocks.filter(s => s.symbol !== stock.symbol));
-    } else {
-      // Add to selection with default 1 share
-      setSelectedStocks([...selectedStocks, {
-        ...stock,
-        shares: 1
-      }]);
-    }
+    // Set the total value
+    setPortfolioTotalValue(totalValue);
   };
   
-  // Handle updating shares for a selected stock
-  const handleUpdateSelectedShares = (symbol: string, shares: number) => {
-    setSelectedStocks(selectedStocks.map(stock => 
-      stock.symbol === symbol ? { ...stock, shares } : stock
-    ));
+  // Function to sort predictions based on selected criteria
+  const getSortedPredictions = () => {
+    if (!predictions.length) return [];
+    
+    return [...predictions].sort((a, b) => {
+      switch (predictionSortBy) {
+        case 'name':
+          return a.symbol.localeCompare(b.symbol);
+        case 'change':
+          return b.changePercent - a.changePercent;
+        case 'confidence':
+          return b.confidence - a.confidence;
+        case 'newest':
+        default:
+          // Maintain original order (newest first)
+          return 0;
+      }
+    });
   };
   
-  // Handle buying multiple stocks
-  const handleBuyMultipleStocks = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Update portfolio value whenever stocks change
+  useEffect(() => {
+    setPortfolioValue();
+  }, [stocks]);
+  
+  // Handle refreshing stock prices
+  const handleRefreshPrices = () => {
+    console.log("Refreshing stock prices");
+    refreshPrices();
+  };
+  
+  // Add this new function for quick demo buying
+  const quickDemoBuy = () => {
+    // Select a random stock from the available stocks
+    const randomIndex = Math.floor(Math.random() * availableStocks.length);
+    const stockToBuy = availableStocks[randomIndex];
     
-    if (selectedStocks.length === 0) {
-      alert('Please select at least one stock to buy');
-      return;
-    }
+    // Random number of shares between 1 and 20
+    const shares = Math.floor(Math.random() * 20) + 1;
     
-    try {
-      setLoading(true);
-      
-      // Process each selected stock
-      for (const stock of selectedStocks) {
         // Create a new stock object
         const newStock = {
-          id: Date.now().toString() + stock.symbol, // Generate a unique ID
-          user_id: user ? user.id : 'default-user',
-          symbol: stock.symbol,
-          name: stock.name,
-          shares: stock.shares,
-          purchase_price: stock.price || stock.current_price,
-          current_price: stock.price || stock.current_price,
+      id: `demo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      user_id: 'demo-user',
+      symbol: stockToBuy.symbol,
+      name: stockToBuy.name,
+      shares: shares,
+      purchase_price: stockToBuy.price,
+      current_price: stockToBuy.price,
           purchase_date: new Date().toISOString().split('T')[0],
-          sector: stock.sector || '',
-          country: stock.country || (stock.symbol.endsWith('.NS') ? 'India' : 'US')
+      sector: stockToBuy.sector || 'Technology',
+      country: stockToBuy.country || (stockToBuy.symbol.endsWith('.NS') ? 'India' : 'US')
+    };
+    
+    // Add to local state
+    setStocks(prevStocks => {
+      // Check if stock already exists in portfolio
+      const existingStockIndex = prevStocks.findIndex(s => s.symbol === newStock.symbol);
+      
+      if (existingStockIndex >= 0) {
+        // Update existing stock by adding shares
+        const updatedStocks = [...prevStocks];
+        const existingStock = updatedStocks[existingStockIndex];
+        
+        // Calculate new average purchase price
+        const totalShares = existingStock.shares + newStock.shares;
+        const totalValue = (existingStock.shares * existingStock.purchase_price) + 
+                          (newStock.shares * newStock.purchase_price);
+        const averagePrice = totalValue / totalShares;
+        
+        updatedStocks[existingStockIndex] = {
+          ...existingStock,
+          shares: totalShares,
+          purchase_price: averagePrice
         };
         
-        // If user is logged in, add to database
-        if (user) {
-          try {
-            const { error } = await supabase
-              .from('portfolio')
-              .insert([{
-                user_id: user.id,
-                symbol: stock.symbol,
-                name: stock.name,
-                shares: stock.shares,
-                purchase_price: stock.price || stock.current_price,
-                current_price: stock.price || stock.current_price,
-                purchase_date: new Date().toISOString().split('T')[0],
-                sector: stock.sector || '',
-                country: stock.country || (stock.symbol.endsWith('.NS') ? 'India' : 'US')
-              }]);
-            
-            if (error) {
-              console.error(`Error adding ${stock.symbol} to database:`, error);
-            }
-          } catch (dbError) {
-            console.error(`Error adding ${stock.symbol} to database:`, dbError);
-            // Still add to local state even if database fails
-            setStocks([...stocks, newStock]);
-          }
-        } else {
-          // If no user, just add to local state
-          setStocks(prevStocks => [...prevStocks, newStock]);
-        }
+        return updatedStocks;
+      } else {
+        // Add new stock
+        return [...prevStocks, newStock];
       }
-      
-      // Fetch updated stocks if user is logged in
-      if (user) {
-        fetchStocks();
-      }
-      
-      // Reset form
-      setShowBuyForm(false);
-      setMultiBuyMode(false);
-      setSelectedStocks([]);
-      setBuyStock({
-        symbol: '',
-        name: '',
-        shares: 1,
-        price: 0,
-        sector: '',
-        country: '',
-        predictionYears: 5,
-        isProcessing: false
-      });
-      setSearchQuery('');
-      setSearchResults([]);
-      
-      // Show success message
-      alert(`Successfully purchased ${selectedStocks.length} stocks`);
-    } catch (error) {
-      console.error('Error buying stocks:', error);
-      alert(`Error purchasing stocks: ${error}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Add this function to update current prices
-  const updateCurrentPrices = async () => {
-    if (stocks.length === 0) return;
+    });
     
-    try {
-      setLoading(true);
-      
-      // Get symbols from portfolio
-      const symbols = stocks.map(stock => stock.symbol);
-      const uniqueSymbols = [...new Set(symbols)];
-      
-      // Get quotes for all symbols
-      const updatedPrices = await Promise.all(
-        uniqueSymbols.map(async (symbol) => {
-          const quote = await getStockQuote(symbol);
-          return {
-            symbol,
-            price: quote?.price || null
-          };
-        })
-      );
-      
-      // Update stocks with new prices
-      setStocks(prevStocks => 
-        prevStocks.map(stock => {
-          const updatedPrice = updatedPrices.find(p => p.symbol === stock.symbol);
-          if (updatedPrice && updatedPrice.price) {
-            return {
-              ...stock,
-              current_price: updatedPrice.price
-            };
-          }
-          return stock;
-        })
-      );
-      
-      // If user is logged in, update database
-      if (user) {
-        for (const stock of stocks) {
-          const updatedPrice = updatedPrices.find(p => p.symbol === stock.symbol);
-          if (updatedPrice && updatedPrice.price) {
-            try {
-              await supabase
-                .from('portfolio')
-                .update({ current_price: updatedPrice.price })
-                .eq('id', stock.id);
-            } catch (error) {
-              console.error('Error updating price in database:', error);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error updating prices:', error);
-    } finally {
-      setLoading(false);
-    }
+    // Show success toast
+    toast.success(`Successfully added ${shares} shares of ${stockToBuy.symbol} to your portfolio!`);
   };
   
   return (
@@ -855,153 +976,274 @@ function Portfolio() {
         <div className="flex space-x-3">
           <button
             type="button"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            onClick={updateCurrentPrices}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+            onClick={refreshPrices}
           >
-            <svg className="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh Prices
           </button>
+          
+          {/* Demo Buy Button */}
           <button
             type="button"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            onClick={() => setShowBuyForm(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all"
+            onClick={quickDemoBuy}
           >
-            <svg className="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
+            <PlusCircle className="h-4 w-4 mr-2" />
+            Quick Demo Buy
+          </button>
+          
+          <button
+            type="button"
+            className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-md text-white bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all relative"
+            onClick={() => {
+              setShowBuyForm(true);
+              // Pre-populate search results with popular stocks to improve UX
+              if (availableStocks && availableStocks.length > 0) {
+                setSearchResults(availableStocks.slice(0, 12).map(stock => ({
+                  ...stock,
+                  inPortfolio: stocks.some(s => s.symbol === stock.symbol)
+                })));
+              }
+            }}
+          >
+            <PlusCircle className="h-5 w-5 mr-2" />
             Buy Stock
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
           </button>
         </div>
       </div>
       
-      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-indigo-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-indigo-800 mb-2">Total Portfolio Value</h3>
-            <p className="text-2xl font-bold text-indigo-900">${portfolioValue.toFixed(2)}</p>
-          </div>
-          <div className={`p-4 rounded-lg ${portfolioGainLoss >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-            <h3 className={`text-sm font-medium mb-2 ${portfolioGainLoss >= 0 ? 'text-green-800' : 'text-red-800'}`}>
-              Total Gain/Loss
-            </h3>
-            <p className={`text-2xl font-bold ${portfolioGainLoss >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-              ${portfolioGainLoss.toFixed(2)} ({portfolioGainLossPercent.toFixed(2)}%)
+      {/* Demo Info Box */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 md:p-6 mb-6">
+        <h3 className="text-lg md:text-xl font-semibold text-blue-800 dark:text-blue-300 mb-2">Demo Portfolio Features</h3>
+        <p className="text-blue-700 dark:text-blue-400 mb-4">
+          This demo portfolio allows you to practice buying and selling stocks without using real money.
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Buy Stocks</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Use the "Buy Stock" button to purchase new stocks or "Buy More" to add to existing positions.
             </p>
           </div>
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-blue-800 mb-2">Number of Stocks</h3>
-            <p className="text-2xl font-bold text-blue-900">{stocks.length}</p>
+          
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Sell Stocks</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Use the "Sell" button to partially or completely sell your stock positions.
+            </p>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Refresh Prices</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Use the "Refresh Prices" button to simulate market price changes for your portfolio.
+            </p>
           </div>
         </div>
       </div>
       
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Your Portfolio</h2>
-        
-        {stocks.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow-md text-center">
-            <p className="text-gray-500 mb-4">You don't have any stocks in your portfolio yet.</p>
+      {/* Portfolio Value Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 md:p-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Portfolio Value</p>
+            <p className="text-2xl font-bold">${Number(portfolioTotalValue).toFixed(2)}</p>
+          </div>
+          
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Today's Change</p>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">+$45.23 (0.56%)</p>
+          </div>
+          
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total Gain/Loss</p>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">+${Number(portfolioGainLoss).toFixed(2)} ({Number(portfolioGainLossPercent).toFixed(2)}%)</p>
+          </div>
+          
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Number of Stocks</p>
+            <p className="text-2xl font-bold">{stocks.length}</p>
+          </div>
+        </div>
+      </div>
+      
+      {/* Portfolio Actions */}
+      <div className="flex flex-wrap gap-3 mb-6">
             <button
               onClick={() => setShowBuyForm(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              <PlusCircle className="-ml-1 mr-2 h-5 w-5" />
-              Buy Your First Stock
+          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md flex items-center shadow-sm transition-colors"
+        >
+          <PlusCircle className="h-5 w-5 mr-2" />
+          Buy Stock
+        </button>
+        
+        <button
+          onClick={handleRefreshPrices}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center shadow-sm transition-colors"
+          disabled={loading}
+        >
+          <RefreshCw className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? 'Refreshing...' : 'Refresh Prices'}
             </button>
           </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+      
+      {/* Transaction History Section */}
+      {portfolioHistory.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Transactions</h3>
+          <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Stock
+                    Date/Time
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Shares
+                    Transaction
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Purchase Price
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Current Price
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Value
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Gain/Loss
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                    Value
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
+                {portfolioHistory
+                  .filter(transaction => transaction.transaction !== 'update')
+                  .slice(0, 5)
+                  .map((transaction, index) => (
+                    <tr key={index}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(transaction.date).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {transaction.transaction}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <span className={transaction.transaction.startsWith('BUY') ? 'text-red-600' : 'text-green-600'}>
+                          ${Number(transaction.value).toFixed(2)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+          {portfolioHistory.filter(t => t.transaction !== 'update').length === 0 && (
+            <p className="text-gray-500 text-center py-4">No transactions yet</p>
+          )}
+        </div>
+      )}
+      
+      {/* Portfolio Table */}
+      <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+        <div className="p-4 md:p-6 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-900">
+              <tr>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Stock
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">
+                  Sector
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">
+                  Country
+                </th>
+                <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Shares
+                </th>
+                <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">
+                  Avg. Price
+                </th>
+                <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Current Price
+                  </th>
+                <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Value
+                  </th>
+                <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">
+                    Gain/Loss
+                  </th>
+                <th scope="col" className="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {stocks.map((stock) => {
-                  const purchaseValue = safeNumber(stock.purchase_price) * safeNumber(stock.shares);
-                  const currentValue = safeNumber(stock.current_price) * safeNumber(stock.shares);
-                  const gainLoss = currentValue - purchaseValue;
-                  const gainLossPercent = (gainLoss / purchaseValue) * 100;
+                // Calculate value and gain/loss with proper type checks
+                const currentPrice = typeof stock.current_price === 'number' ? stock.current_price : 0;
+                const purchasePrice = typeof stock.purchase_price === 'number' ? stock.purchase_price : 0;
+                const shares = typeof stock.shares === 'number' ? stock.shares : 0;
+                
+                const stockValue = currentPrice * shares;
+                const initialValue = purchasePrice * shares;
+                const gainLoss = stockValue - initialValue;
+                const gainLossPercent = initialValue > 0 ? (gainLoss / initialValue) * 100 : 0;
                   
                   return (
                     <tr key={stock.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div>
-                            <div className="text-sm font-medium text-gray-900">{stock.symbol}</div>
-                            <div className="text-sm text-gray-500">{stock.name}</div>
-                            <div className="flex mt-1 space-x-2">
-                              {stock.sector && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                  {stock.sector}
-                                </span>
-                              )}
-                              {stock.country && (
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  stock.country === 'India' 
-                                    ? 'bg-orange-100 text-orange-800' 
-                                    : 'bg-green-100 text-green-800'
-                                }`}>
-                                  {stock.country}
-                                </span>
-                              )}
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            {stock.symbol}
+                          </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[120px]">
+                            {stock.name}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {stock.shares}
+                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 hidden sm:table-cell">
+                      {stock.sector}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${safeNumber(stock.purchase_price).toFixed(2)}
+                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell">
+                      {stock.country}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${safeNumber(stock.current_price).toFixed(2)}
+                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-right">
+                      {Number(shares).toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${currentValue.toFixed(2)}
+                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-right hidden sm:table-cell">
+                      ${Number(purchasePrice).toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm font-medium ${gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ${gainLoss.toFixed(2)} ({gainLossPercent.toFixed(2)}%)
-                        </div>
+                    <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      ${Number(currentPrice).toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
+                    <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      ${Number(stockValue).toFixed(2)}
+                    </td>
+                    <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium hidden md:table-cell">
+                      <span className={gainLoss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                        ${Number(gainLoss).toFixed(2)} 
+                        ({Number(gainLossPercent).toFixed(2)}%)
+                      </span>
+                    </td>
+                    <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-center space-x-2">
                           <button
-                            onClick={() => sellStock(stock.id)}
-                            className="text-red-600 hover:text-red-900"
+                          onClick={() => handleInitiateSell(stock)}
+                          className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 dark:bg-red-800 dark:text-red-100 dark:hover:bg-red-700"
                           >
                             Sell
                           </button>
+                        <button
+                          onClick={() => handleBuyMore(stock)}
+                          className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 dark:bg-green-800 dark:text-green-100 dark:hover:bg-green-700"
+                        >
+                          Buy More
+                        </button>
                           <button
                             onClick={() => handleGeneratePrediction(stock)}
-                            className="text-indigo-600 hover:text-indigo-900"
+                          className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 dark:bg-blue-800 dark:text-blue-100 dark:hover:bg-blue-700 hidden sm:block"
                           >
-                            Predict
+                          {predictionLoading ? 'Loading...' : 'Predict'}
                           </button>
                         </div>
                       </td>
@@ -1011,336 +1253,256 @@ function Portfolio() {
               </tbody>
             </table>
           </div>
-        )}
       </div>
       
-      {/* Predictions Section */}
+      {/* Stock Predictions */}
+      <div id="predictions-section" className="mt-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <h2 className="text-2xl font-semibold">AI Stock Predictions</h2>
+          
+          <div className="flex items-center gap-4">
+            {predictions.length > 1 && (
+              <div className="flex items-center gap-2">
+                <label htmlFor="sort-predictions" className="text-sm text-gray-500 dark:text-gray-400">
+                  Sort by:
+                </label>
+                <select
+                  id="sort-predictions"
+                  value={predictionSortBy}
+                  onChange={(e) => setPredictionSortBy(e.target.value as any)}
+                  className="rounded-md border-gray-300 dark:border-gray-700 text-sm dark:bg-gray-800 py-1"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="name">Symbol</option>
+                  <option value="change">Change %</option>
+                  <option value="confidence">Confidence</option>
+                </select>
+              </div>
+            )}
+            
       {predictions.length > 0 && (
-        <div className="mt-12">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Stock Predictions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {predictions.map((prediction) => (
-              <div key={prediction.symbol} className="bg-white rounded-lg shadow-md p-6">
-                <div className="flex justify-between items-start mb-4">
+              <button
+                onClick={() => setPredictions([])}
+                className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-md transition-colors"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+        </div>
+        
+        {predictions.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            {getSortedPredictions().map((prediction, index) => (
+              <div 
+                key={index} 
+                className={`p-4 rounded-lg shadow-md border-2 transition-all duration-500 ${
+                  prediction.isNew 
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 animate-pulse' 
+                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-4">
                   <div>
-                    <h3 className="text-lg font-medium text-gray-900">{prediction.symbol}</h3>
-                    <p className="text-sm text-gray-500">{prediction.name}</p>
+                    <h3 className="text-lg font-bold">{prediction.symbol}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[200px]">{prediction.name}</p>
                   </div>
+                  <div className="flex items-center gap-2">
+                    {prediction.isNew && (
+                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100">
+                        New
+                      </span>
+                    )}
                   <button
                     onClick={() => {
-                      setPredictions(predictions.filter(p => p.symbol !== prediction.symbol));
+                        setPredictions(predictions.filter((_, i) => i !== index));
                     }}
-                    className="text-gray-400 hover:text-gray-500"
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   >
-                    <span className="sr-only">Close</span>
-                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
                   </button>
                 </div>
+                  </div>
+                  
+                <div className="grid grid-cols-2 gap-4 mb-3">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Current Price</p>
+                    <p className="text-lg font-semibold">${typeof prediction.currentPrice === 'number' ? Number(prediction.currentPrice).toFixed(2) : 'N/A'}</p>
+                      </div>
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Prediction (1 Year)</p>
+                    <p className="text-lg font-semibold">${typeof prediction.prediction === 'number' ? Number(prediction.prediction).toFixed(2) : 'N/A'}</p>
+                    </div>
+                </div>
+                  
+                <div className="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Confidence</p>
+                    <p className="text-lg font-semibold">{typeof prediction.confidence === 'number' ? Math.round(prediction.confidence) + '%' : 'N/A'}</p>
+                    </div>
+                    <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Projected Change</p>
+                    <p className={`text-lg font-semibold ${typeof prediction.changePercent === 'number' && prediction.changePercent > 0 ? 'text-green-600 dark:text-green-400' : typeof prediction.changePercent === 'number' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {typeof prediction.changePercent === 'number' ? (prediction.changePercent > 0 ? '+' : '') + prediction.changePercent.toFixed(1) + '%' : 'N/A'}
+                      </p>
+                    </div>
+                    </div>
                 
-                <div className="border-t border-gray-200 pt-4">
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-500 mb-2">Current Price</h4>
-                    <p className="text-lg font-semibold">${prediction.currentPrice.toFixed(2)}</p>
+                <div className="mt-4 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-md">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">AI Analysis</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 hover:line-clamp-none transition-all">{prediction.analysis}</p>
                   </div>
                   
-                  {prediction.customYear && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">
-                        {prediction.customYearPeriod}-Year Prediction
-                      </h4>
-                      <div className="flex items-baseline">
-                        <p className={`text-lg font-semibold ${prediction.customYear >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ${(prediction.currentPrice * (1 + prediction.customYear / 100)).toFixed(2)}
-                        </p>
-                        <p className={`ml-2 text-sm ${prediction.customYear >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ({prediction.customYear >= 0 ? '+' : ''}{prediction.customYear.toFixed(2)}%)
-                        </p>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="col-span-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">1M</p>
+                    <p className={`text-sm font-medium ${typeof prediction.oneMonth === 'number' && prediction.oneMonth > 0 ? 'text-green-600 dark:text-green-400' : typeof prediction.oneMonth === 'number' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {typeof prediction.oneMonth === 'number' ? (prediction.oneMonth > 0 ? '+' : '') + prediction.oneMonth.toFixed(1) + '%' : 'N/A'}
+                    </p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Confidence: {prediction.customYearConfidence}%
-                      </p>
+                  <div className="col-span-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">6M</p>
+                    <p className={`text-sm font-medium ${typeof prediction.sixMonths === 'number' && prediction.sixMonths > 0 ? 'text-green-600 dark:text-green-400' : typeof prediction.sixMonths === 'number' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {typeof prediction.sixMonths === 'number' ? (prediction.sixMonths > 0 ? '+' : '') + prediction.sixMonths.toFixed(1) + '%' : 'N/A'}
+                    </p>
                     </div>
-                  )}
-                  
-                  <div className="grid grid-cols-3 gap-4 mb-4">
-                    <div>
-                      <h4 className="text-xs font-medium text-gray-500 mb-1">1 Month</h4>
-                      <p className={`text-sm font-medium ${prediction.oneMonth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {prediction.oneMonth >= 0 ? '+' : ''}{prediction.oneMonth.toFixed(2)}%
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-medium text-gray-500 mb-1">6 Months</h4>
-                      <p className={`text-sm font-medium ${prediction.sixMonths >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {prediction.sixMonths >= 0 ? '+' : ''}{prediction.sixMonths.toFixed(2)}%
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-medium text-gray-500 mb-1">1 Year</h4>
-                      <p className={`text-sm font-medium ${prediction.oneYear >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {prediction.oneYear >= 0 ? '+' : ''}{prediction.oneYear.toFixed(2)}%
-                      </p>
-                    </div>
+                  <div className="col-span-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">5Y</p>
+                    <p className={`text-sm font-medium ${typeof prediction.fiveYear === 'number' && prediction.fiveYear > 0 ? 'text-green-600 dark:text-green-400' : typeof prediction.fiveYear === 'number' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {typeof prediction.fiveYear === 'number' ? (prediction.fiveYear > 0 ? '+' : '') + prediction.fiveYear.toFixed(1) + '%' : 'N/A'}
+                    </p>
                   </div>
-                  
-                  <button
-                    onClick={() => {
-                      // Toggle detailed analysis
-                      setPredictions(predictions.map(p => 
-                        p.symbol === prediction.symbol 
-                          ? { ...p, showDetails: !p.showDetails } 
-                          : p
-                      ));
-                    }}
-                    className="text-sm text-indigo-600 hover:text-indigo-500 font-medium"
-                  >
-                    {prediction.showDetails ? 'Hide Details' : 'Show Detailed Analysis'}
-                  </button>
-                  
-                  {prediction.showDetails && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-md text-sm">
-                      <div className="prose prose-sm max-w-none">
-                        {prediction.analysis.split('\n').map((paragraph, index) => {
-                          if (paragraph.startsWith('# ')) {
-                            return <h3 key={index} className="text-base font-semibold mt-4 mb-2">{paragraph.substring(2)}</h3>;
-                          } else if (paragraph.startsWith('## ')) {
-                            return <h4 key={index} className="text-sm font-medium mt-3 mb-1">{paragraph.substring(3)}</h4>;
-                          } else if (paragraph.trim() === '') {
-                            return <div key={index} className="h-2"></div>;
-                          } else {
-                            return <p key={index} className="mb-2">{paragraph}</p>;
-                          }
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
           </div>
+        ) : (
+          <div className="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <p className="text-gray-500 dark:text-gray-400">
+              No predictions generated yet. Click the "Predict" button on any stock to see AI-powered price predictions.
+            </p>
         </div>
       )}
+      </div>
       
       {/* Buy Stock Modal */}
       {showBuyForm && (
-        <div className="fixed z-10 inset-0 overflow-y-auto">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
-            </div>
-
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-2xl font-medium text-gray-900" id="modal-title">
-                      Buy Stock
-                    </h3>
-                    
-                    {/* Close button */}
+        <div className="fixed z-50 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen p-4">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75"></div>
+            
+            <div className="relative bg-white rounded-lg max-w-lg w-full mx-auto shadow-xl border-2 border-green-500">
+              {/* Color bar at top */}
+              <div className="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-green-500 rounded-t-lg"></div>
+              
+              {/* Header */}
+              <div className="flex justify-between items-center p-4 border-b">
+                <h3 className="text-xl font-bold text-gray-900">Buy Stock</h3>
                     <button
                       type="button"
+                  onClick={() => setShowBuyForm(false)}
                       className="text-gray-400 hover:text-gray-500"
-                      onClick={() => {
-                        if (buyStock.isProcessing) return;
-                        setShowBuyForm(false);
-                        setBuyStock({
-                          symbol: '',
-                          name: '',
-                          shares: 1,
-                          price: 0,
-                          sector: '',
-                          country: '',
-                          predictionYears: 5,
-                          isProcessing: false
-                        });
-                        setSearchQuery('');
-                        setSearchResults([]);
-                      }}
-                    >
-                      <span className="sr-only">Close</span>
+                >
                       <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
                   
-                  <form id="buy-stock-form" onSubmit={handleBuyStock}>
-                    {/* Step 1: Search for a stock */}
-                    <div className={`mb-6 ${buyStock.symbol ? 'opacity-50' : ''}`}>
-                      <label htmlFor="stock-search" className="block text-lg font-medium text-gray-700 mb-3">
-                        Step 1: Search for a Stock
-                      </label>
+              {/* Content */}
+              <div className="p-6">
+                <form onSubmit={handleBuyStock}>
+                  {/* Stock Search */}
+                  {!buyFormData.symbol && (
+                    <div className="mb-4">
+                      <label htmlFor="stock-search" className="block text-sm font-medium text-gray-700 mb-1">Search Stock</label>
                       <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Search className="h-5 w-5 text-gray-400" />
+                        </div>
                         <input
                           type="text"
                           id="stock-search"
-                          className="focus:ring-indigo-500 focus:border-indigo-500 block w-full text-lg border-gray-300 rounded-md py-3 px-4"
-                          placeholder="Enter symbol or company name"
+                          className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 border-gray-300 rounded-md"
+                          placeholder="Enter symbol (e.g., AAPL) or company name"
                           value={searchQuery}
                           onChange={handleSearchChange}
-                          onFocus={() => {
-                            if (buyStock.symbol) return; // Disable when stock is selected
-                            handleSearchFocus();
-                            // Always show some default stocks even if search query is empty
-                            if (searchResults.length === 0) {
-                              setSearchResults(availableStocks.slice(0, 10).map(stock => ({
-                                ...stock,
-                                inPortfolio: stocks.some(s => s.symbol === stock.symbol)
-                              })));
-                            }
-                          }}
+                          onFocus={handleSearchFocus}
                           onBlur={handleSearchBlur}
-                          disabled={!!buyStock.symbol || buyStock.isProcessing}
                         />
-                        
-                        {/* Search results dropdown */}
-                        {searchFocused && !buyStock.symbol && (
-                          <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-300 max-h-96 overflow-auto">
-                            <div className="sticky top-0 bg-gray-50 px-4 py-3 text-base font-medium text-gray-700 uppercase tracking-wider border-b border-gray-200">
-                              {searchQuery ? 'Search Results' : 'Popular Stocks'}
                             </div>
                             
+                      {/* Search Results */}
+                      {searchFocused && (
+                        <div className="mt-2 border border-gray-200 rounded-md shadow-sm max-h-60 overflow-y-auto">
                             {searchResults.length > 0 ? (
                               searchResults.map((result) => (
                                 <div
                                   key={result.symbol}
-                                  className={`px-6 py-4 hover:bg-gray-100 cursor-pointer border-b border-gray-100 ${
-                                    result.inPortfolio ? 'border-l-4 border-indigo-500' : ''
-                                  }`}
-                                  onClick={() => {
-                                    handleSelectStock(result);
-                                    setSearchQuery('');
-                                    setSearchResults([]);
-                                  }}
-                                >
-                                  <div className="flex justify-between items-center">
+                                className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100"
+                                onClick={() => handleSelectStock(result)}
+                              >
+                                <div className="flex justify-between">
                                     <div>
-                                      <div className="text-xl font-medium text-gray-900 mb-1">
-                                        {result.symbol}
-                                        {result.inPortfolio && (
-                                          <span className="ml-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
-                                            In Portfolio
-                                          </span>
-                                        )}
+                                    <div className="font-medium">{result.symbol}</div>
+                                    <div className="text-sm text-gray-500">{result.name}</div>
                                       </div>
-                                      <div className="text-base text-gray-600">{result.name}</div>
+                                  <div className="font-medium">${(result.price || result.current_price || 0).toFixed(2)}</div>
                                     </div>
-                                    <div className="text-xl font-medium text-gray-900">
-                                      ${((result.price || result.current_price) || 0).toFixed(2)}
-                                    </div>
-                                  </div>
-                                  <div className="flex mt-3 space-x-3">
-                                    {result.sector && (
-                                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-base font-medium bg-blue-100 text-blue-800">
-                                        {result.sector}
-                                      </span>
-                                    )}
-                                    {result.country && (
-                                      <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-base font-medium ${
-                                        result.country === 'India' 
-                                          ? 'bg-orange-100 text-orange-800' 
-                                          : 'bg-green-100 text-green-800'
-                                      }`}>
-                                        {result.country}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {result.inPortfolio && (
-                                    <div className="text-base text-gray-500 mt-2">
-                                      You own {result.shares || 0} shares at ${(result.purchase_price || 0).toFixed(2)}
-                                    </div>
-                                  )}
                                 </div>
                               ))
                             ) : (
-                              <div className="px-6 py-4 text-gray-500">
-                                No stocks found. Try a different search term.
+                            <div className="p-3 text-center text-gray-500">No results found</div>
+                          )}
                               </div>
                             )}
                           </div>
                         )}
+                  
+                  {/* Selected Stock Details */}
+                  {buyFormData.symbol && (
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <div className="font-medium">{buyFormData.symbol}</div>
+                            <div className="text-sm text-gray-500">{buyFormData.name}</div>
                       </div>
+                          <div className="font-medium">${buyFormData.price.toFixed(2)}</div>
                     </div>
                     
-                    {/* Step 2: Configure purchase details */}
-                    {buyStock.symbol && (
-                      <>
-                        <div className="mb-6">
-                          <div className="flex justify-between items-center mb-3">
-                            <h4 className="block text-lg font-medium text-gray-700">
-                              Step 2: Configure Purchase Details
-                            </h4>
-                            
-                            {/* Change stock button */}
                             <button
                               type="button"
-                              className="text-sm text-indigo-600 hover:text-indigo-500"
+                          className="mt-2 text-sm text-indigo-600"
                               onClick={() => {
-                                if (buyStock.isProcessing) return;
-                                setBuyStock({
+                            setBuyFormData({
                                   symbol: '',
                                   name: '',
                                   shares: 1,
                                   price: 0,
                                   sector: '',
                                   country: '',
-                                  predictionYears: 5,
-                                  isProcessing: false
                                 });
                                 setSearchQuery('');
                               }}
-                              disabled={buyStock.isProcessing}
                             >
                               Change Stock
                             </button>
                           </div>
                           
-                          <div className="p-4 bg-gray-50 rounded-md mb-4">
-                            <div className="flex justify-between items-center mb-3">
+                      {/* Quantity Selector */}
                               <div>
-                                <div className="text-xl font-medium text-gray-900">{buyStock.symbol}</div>
-                                <div className="text-base text-gray-600">{buyStock.name}</div>
-                              </div>
-                              <div className="text-xl font-medium text-gray-900">
-                                ${(buyStock.price || 0).toFixed(2)}
-                              </div>
-                            </div>
-                            
-                            {/* Show if stock is already in portfolio */}
-                            {stocks.some(s => s.symbol === buyStock.symbol) && (
-                              <div className="mt-3 p-2 bg-indigo-50 rounded border border-indigo-100 text-sm text-indigo-700">
-                                <div className="font-medium">Already in your portfolio</div>
-                                <div className="mt-1">
-                                  {(() => {
-                                    const existingStock = stocks.find(s => s.symbol === buyStock.symbol);
-                                    return existingStock 
-                                      ? `You own ${existingStock.shares} shares at an average price of $${existingStock.purchase_price.toFixed(2)}`
-                                      : '';
-                                  })()}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Improved quantity selector */}
-                          <div className="mb-4">
-                            <label htmlFor="shares" className="block text-base font-medium text-gray-700 mb-2">
-                              Number of Shares to Buy
-                            </label>
-                            <div className="flex items-center">
+                        <label htmlFor="shares" className="block text-sm font-medium text-gray-700 mb-1">Number of Shares</label>
+                        <div className="flex rounded-md shadow-sm">
                               <button
                                 type="button"
-                                className="inline-flex items-center justify-center p-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100"
-                                onClick={() => setBuyStock({ ...buyStock, shares: Math.max(1, buyStock.shares - 1) })}
-                                disabled={buyStock.isProcessing}
+                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100"
+                            onClick={() => setBuyFormData({ ...buyFormData, shares: Math.max(1, buyFormData.shares - 1) })}
                               >
                                 <span className="sr-only">Decrease</span>
-                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                   <path fillRule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
                                 </svg>
                               </button>
@@ -1348,34 +1510,30 @@ function Portfolio() {
                                 type="number"
                                 id="shares"
                                 min="1"
-                                step="1"
-                                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full text-center text-lg border-gray-300"
-                                value={buyStock.shares}
-                                onChange={(e) => setBuyStock({ ...buyStock, shares: parseInt(e.target.value) || 1 })}
-                                disabled={buyStock.isProcessing}
+                            className="focus:ring-indigo-500 focus:border-indigo-500 flex-1 block w-full text-center border-gray-300"
+                            value={buyFormData.shares}
+                            onChange={(e) => setBuyFormData({ ...buyFormData, shares: parseInt(e.target.value) || 1 })}
                               />
                               <button
                                 type="button"
-                                className="inline-flex items-center justify-center p-2 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100"
-                                onClick={() => setBuyStock({ ...buyStock, shares: buyStock.shares + 1 })}
-                                disabled={buyStock.isProcessing}
+                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100"
+                            onClick={() => setBuyFormData({ ...buyFormData, shares: buyFormData.shares + 1 })}
                               >
                                 <span className="sr-only">Increase</span>
-                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                   <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                                 </svg>
                               </button>
                             </div>
                             
                             {/* Quick quantity buttons */}
-                            <div className="flex space-x-2 mt-2">
+                        <div className="flex flex-wrap gap-2 mt-2">
                               {[5, 10, 25, 50, 100].map(quantity => (
                                 <button
                                   key={quantity}
                                   type="button"
-                                  className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-                                  onClick={() => setBuyStock({ ...buyStock, shares: quantity })}
-                                  disabled={buyStock.isProcessing}
+                              className="px-2 py-1 text-xs border border-gray-300 rounded-full hover:bg-gray-50"
+                              onClick={() => setBuyFormData({ ...buyFormData, shares: quantity })}
                                 >
                                   {quantity}
                                 </button>
@@ -1383,152 +1541,206 @@ function Portfolio() {
                             </div>
                           </div>
                           
-                          <div className="p-4 bg-indigo-50 rounded-md border border-indigo-100">
-                            <div className="flex justify-between items-center">
-                              <span className="text-base text-gray-700">Total Investment:</span>
-                              <span className="text-xl font-bold text-indigo-700">
-                                ${((buyStock.price || 0) * (buyStock.shares || 1)).toFixed(2)}
-                              </span>
+                      {/* Total */}
+                      <div className="bg-green-50 p-3 rounded-md border border-green-100">
+                        <div className="flex justify-between">
+                          <span>Total Investment:</span>
+                          <span className="font-bold">${(buyFormData.price * buyFormData.shares).toFixed(2)}</span>
                             </div>
                           </div>
                         </div>
-                        
-                        {/* Step 3: Configure AI prediction */}
-                        <div className="mb-6">
-                          <h4 className="block text-lg font-medium text-gray-700 mb-3">
-                            Step 3: Configure AI Prediction
-                          </h4>
-                          
-                          <div className="p-4 bg-yellow-50 rounded-md border border-yellow-100">
-                            <div className="mb-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <label htmlFor="prediction-years" className="block text-base font-medium text-gray-700">
-                                  Generate AI Prediction for {buyStock.predictionYears} {buyStock.predictionYears === 1 ? 'year' : 'years'}
-                                </label>
-                              </div>
-                              
-                              <input
-                                type="range"
-                                id="prediction-years"
-                                min="1"
-                                max="20"
-                                step="1"
-                                className="w-full h-2 bg-yellow-200 rounded-lg appearance-none cursor-pointer"
-                                value={buyStock.predictionYears}
-                                onChange={(e) => setBuyStock({ ...buyStock, predictionYears: parseInt(e.target.value) })}
-                                disabled={buyStock.isProcessing}
-                              />
-                              
-                              <div className="flex justify-between text-xs text-gray-500 px-1 mt-1">
-                                <span>1yr</span>
-                                <span>5yrs</span>
-                                <span>10yrs</span>
-                                <span>15yrs</span>
-                                <span>20yrs</span>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-start">
-                              <div className="flex-shrink-0 mt-0.5">
-                                <svg className="h-5 w-5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clipRule="evenodd" />
-                                </svg>
-                              </div>
-                              <div className="ml-3">
-                                <p className="text-sm text-yellow-700">
-                                  Our AI will analyze {buyStock.symbol} and generate a {buyStock.predictionYears}-year price prediction after purchase. This helps you understand the potential long-term value of your investment.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Purchase summary */}
-                        <div className="mb-6">
-                          <h4 className="block text-lg font-medium text-gray-700 mb-3">
-                            Purchase Summary
-                          </h4>
-                          
-                          <div className="p-4 bg-indigo-50 rounded-md border border-indigo-100">
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span>Stock:</span>
-                                <span className="font-medium">{buyStock.symbol} ({buyStock.name})</span>
-                              </div>
-                              <div className="flex justify-between text-sm">
-                                <span>Price per Share:</span>
-                                <span className="font-medium">${(buyStock.price || 0).toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between text-sm">
-                                <span>Number of Shares:</span>
-                                <span className="font-medium">{buyStock.shares}</span>
-                              </div>
-                              <div className="flex justify-between text-sm">
-                                <span>AI Prediction:</span>
-                                <span className="font-medium">{buyStock.predictionYears} {buyStock.predictionYears === 1 ? 'year' : 'years'}</span>
-                              </div>
-                              <div className="pt-2 border-t border-indigo-200">
-                                <div className="flex justify-between text-indigo-900">
-                                  <span className="font-medium">Total Investment:</span>
-                                  <span className="font-bold">${((buyStock.price || 0) * (buyStock.shares || 1)).toFixed(2)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    )}
+                  )}
+                  
+                  {/* Footer with action buttons */}
+                  <div className="mt-6 border-t border-gray-200 pt-4 flex items-center justify-end space-x-3">
+                    <button
+                      type="button"
+                      className="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                      onClick={() => setShowBuyForm(false)}
+                    >
+                      Cancel
+                    </button>
                     
-                    {/* Action buttons */}
-                    <div className="sm:flex sm:flex-row-reverse mt-6">
+                    {buyFormData.symbol && (
                       <button
                         type="submit"
-                        disabled={!buyStock.symbol || buyStock.shares < 1 || buyStock.isProcessing}
-                        className={`w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white sm:ml-3 sm:w-auto sm:text-sm ${
-                          !buyStock.symbol || buyStock.shares < 1 || buyStock.isProcessing
-                            ? 'bg-gray-300 cursor-not-allowed'
-                            : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                        disabled={buyFormData.isProcessing}
+                        className={`px-4 py-2 shadow-sm text-sm font-medium rounded-md text-white ${
+                          buyFormData.isProcessing ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'
                         }`}
                       >
-                        {buyStock.isProcessing ? (
-                          <>
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
+                        {buyFormData.isProcessing ? (
+                          <div className="flex items-center">
+                            <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
                             Processing...
-                          </>
+                              </div>
                         ) : (
-                          `Buy ${buyStock.shares} ${buyStock.shares === 1 ? 'Share' : 'Shares'}`
+                          `Buy ${buyFormData.shares} ${buyFormData.shares === 1 ? 'Share' : 'Shares'}`
                         )}
                       </button>
-                      
-                      {/* Cancel button */}
+                    )}
+                              </div>
+                </form>
+                            </div>
+                              </div>
+                              </div>
+                            </div>
+      )}
+      
+      {/* Sell Stock Modal */}
+      {showSellForm && (
+        <div className="fixed z-50 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen p-4">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75"></div>
+            
+            <div className="relative bg-white rounded-lg max-w-lg w-full mx-auto shadow-xl border-2 border-red-500">
+              {/* Color bar at top */}
+              <div className="h-2 bg-gradient-to-r from-red-500 to-pink-500 rounded-t-lg"></div>
+              
+              {/* Header */}
+              <div className="flex justify-between items-center p-4 border-b">
+                <h3 className="text-xl font-bold text-gray-900">Sell Stock</h3>
+                <button 
+                  type="button"
+                  onClick={() => setShowSellForm(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                              </div>
+              
+              {/* Content */}
+              <div className="p-6">
+                {/* Selected Stock Details */}
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-medium">{sellFormData.symbol}</div>
+                        <div className="text-sm text-gray-500">{sellFormData.name}</div>
+                              </div>
+                      <div className="font-medium">${sellFormData.price.toFixed(2)}</div>
+                              </div>
+                    <div className="mt-2 text-sm text-gray-600">
+                      You own: <span className="font-medium">{sellFormData.maxShares} shares</span>
+                              </div>
+                                </div>
+                  
+                  {/* Quantity Selector */}
+                  <div>
+                    <label htmlFor="sell-shares" className="block text-sm font-medium text-gray-700 mb-1">
+                      Number of Shares to Sell
+                    </label>
+                    <div className="flex rounded-md shadow-sm">
                       <button
                         type="button"
-                        className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                        onClick={() => {
-                          if (buyStock.isProcessing) return;
-                          setShowBuyForm(false);
-                          setBuyStock({
-                            symbol: '',
-                            name: '',
-                            shares: 1,
-                            price: 0,
-                            sector: '',
-                            country: '',
-                            predictionYears: 5,
-                            isProcessing: false
-                          });
-                          setSearchQuery('');
-                          setSearchResults([]);
-                        }}
-                        disabled={buyStock.isProcessing}
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100"
+                        onClick={() => setSellFormData({ 
+                          ...sellFormData, 
+                          shares: Math.max(1, sellFormData.shares - 1) 
+                        })}
                       >
-                        Cancel
+                        <span className="sr-only">Decrease</span>
+                        <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                        </svg>
                       </button>
-                    </div>
-                  </form>
+                      <input
+                        type="number"
+                        id="sell-shares"
+                        min="1"
+                        max={sellFormData.maxShares}
+                        className="focus:ring-red-500 focus:border-red-500 flex-1 block w-full text-center border-gray-300"
+                        value={sellFormData.shares}
+                        onChange={(e) => setSellFormData({ 
+                          ...sellFormData, 
+                          shares: parseInt(e.target.value) || 1
+                        })}
+                      />
+                      <button
+                        type="button"
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100"
+                        onClick={() => setSellFormData({ 
+                          ...sellFormData, 
+                          shares: Math.min(sellFormData.maxShares, sellFormData.shares + 1) 
+                        })}
+                      >
+                        <span className="sr-only">Increase</span>
+                        <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                              </div>
+                    
+                    {/* Quick quantity buttons */}
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-xs border border-gray-300 rounded-full hover:bg-gray-50"
+                        onClick={() => setSellFormData({ ...sellFormData, shares: 1 })}
+                      >
+                        1
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-xs border border-gray-300 rounded-full hover:bg-gray-50"
+                        onClick={() => setSellFormData({ 
+                          ...sellFormData, 
+                          shares: Math.floor(sellFormData.maxShares / 2)
+                        })}
+                      >
+                        Half
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-xs border border-gray-300 rounded-full hover:bg-gray-50"
+                        onClick={() => setSellFormData({ ...sellFormData, shares: sellFormData.maxShares })}
+                      >
+                        All
+                      </button>
+                            </div>
+                          </div>
+                  
+                  {/* Total */}
+                  <div className="bg-green-50 p-3 rounded-md border border-green-100">
+                    <div className="flex justify-between">
+                      <span>Total Sale Amount:</span>
+                      <span className="font-bold">${(sellFormData.price * sellFormData.shares).toFixed(2)}</span>
+                        </div>
+                  </div>
+                </div>
+                    
+                {/* Footer with action buttons */}
+                <div className="mt-6 border-t border-gray-200 pt-4 flex items-center justify-end space-x-3">
+                      <button
+                    type="button"
+                    className="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                    onClick={() => setShowSellForm(false)}
+                  >
+                    Cancel
+                      </button>
+                      
+                      <button
+                        type="button"
+                    onClick={handleConfirmSell}
+                    disabled={sellFormData.isProcessing || sellFormData.shares < 1 || sellFormData.shares > sellFormData.maxShares}
+                    className={`px-4 py-2 shadow-sm text-sm font-medium rounded-md text-white ${
+                      sellFormData.isProcessing || sellFormData.shares < 1 || sellFormData.shares > sellFormData.maxShares
+                        ? 'bg-gray-400'
+                        : 'bg-red-600 hover:bg-red-700'
+                    }`}
+                  >
+                    {sellFormData.isProcessing ? (
+                      <div className="flex items-center">
+                        <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                        Processing...
+                      </div>
+                    ) : (
+                      `Sell ${sellFormData.shares} ${sellFormData.shares === 1 ? 'Share' : 'Shares'}`
+                    )}
+                      </button>
                 </div>
               </div>
             </div>

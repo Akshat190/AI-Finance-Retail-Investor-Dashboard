@@ -35,7 +35,9 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     try {
-      setLoading(true);
+      if (stocks.length === 0) {
+        setLoading(true);
+      }
       setError(null);
 
       const { data, error: fetchError } = await supabase
@@ -140,7 +142,23 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   useEffect(() => {
-    fetchStocks();
+    let isMounted = true;
+    
+    const fetchData = async () => {
+      if (isMounted) {
+        await fetchStocks();
+      }
+    };
+    
+    if (user) {
+      fetchData();
+    } else {
+      setStocks([]);
+    }
+    
+    return () => {
+      isMounted = false;
+    };
   }, [user]);
 
   const value = {

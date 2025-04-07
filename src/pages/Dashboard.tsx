@@ -1,26 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
-  Loader2, 
-  BarChart2, 
-  PieChart, 
-  TrendingUp, 
-  TrendingDown, 
-  RefreshCw, 
-  User, 
-  LogOut,
-  Search,
-  Globe,
+  BarChart2,
+  TrendingUp,
+  TrendingDown,
   DollarSign,
+  PieChart,
+  RefreshCw,
   ArrowUp,
   ArrowDown,
-  Calendar,
-  Clock,
-  Bitcoin,
-  Bot,
-  Newspaper
+  Newspaper,
+  PlusCircle,
+  Brain,
+  ChevronRight
 } from 'lucide-react';
 import InvestmentTaxCalculator from '../components/InvestmentTaxCalculator';
 import PortfolioManager from '../components/PortfolioManager';
@@ -43,11 +36,11 @@ interface MarketIndex {
 interface StockNews {
   id: string;
   title: string;
-  source: string;
   url: string;
-  image?: string;
+  source: string;
   date: string;
-  summary: string;
+  snippet: string;
+  imageUrl?: string;
 }
 
 interface CryptoData {
@@ -105,7 +98,51 @@ export const Dashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [usIndices, setUsIndices] = useState<MarketIndex[]>([]);
   const [indianIndices, setIndianIndices] = useState<MarketIndex[]>([]);
-  const [news, setNews] = useState<StockNews[]>([]);
+  const [news, setNews] = useState<StockNews[]>([
+    {
+      id: '1',
+      title: 'Fed signals potential rate cuts later this year as inflation cools',
+      source: 'Financial Times',
+      url: '#',
+      imageUrl: 'https://placehold.co/600x400/e2e8f0/475569?text=Fed+News',
+      date: '2 hours ago',
+      snippet: 'Federal Reserve officials indicated they may begin cutting interest rates in the coming months if inflation continues to moderate, according to minutes from their latest meeting.'
+    },
+    {
+      id: '2',
+      title: 'Indian IT stocks rally on strong quarterly results and positive outlook',
+      source: 'Economic Times',
+      url: '#',
+      imageUrl: 'https://placehold.co/600x400/e2e8f0/475569?text=IT+Stocks',
+      date: '4 hours ago',
+      snippet: 'Major Indian IT companies including TCS, Infosys, and Wipro saw their stocks rise following better-than-expected quarterly results and optimistic guidance for the fiscal year.'
+    },
+    {
+      id: '3',
+      title: 'NVIDIA surpasses $2 trillion market cap on AI chip demand',
+      source: 'Bloomberg',
+      url: '#',
+      imageUrl: 'https://placehold.co/600x400/e2e8f0/475569?text=NVIDIA',
+      date: '6 hours ago',
+      snippet: 'NVIDIA\'s market value crossed $2 trillion as demand for its AI chips continues to surge, making it the third most valuable U.S. company after Microsoft and Apple.'
+    },
+    {
+      id: '4',
+      title: 'RBI maintains repo rate, signals continued focus on inflation control',
+      source: 'Business Standard',
+      url: '#',
+      date: '8 hours ago',
+      snippet: 'The Reserve Bank of India kept its key policy rate unchanged at 6.5% for the seventh consecutive time, emphasizing its commitment to bringing inflation down to its 4% target.'
+    },
+    {
+      id: '5',
+      title: 'Oil prices rise on Middle East tensions and supply concerns',
+      source: 'Reuters',
+      url: '#',
+      date: '10 hours ago',
+      snippet: 'Crude oil prices increased by over 2% as geopolitical tensions in the Middle East raised concerns about potential supply disruptions in the region.'
+    }
+  ]);
   const [topGainers, setTopGainers] = useState<any[]>([]);
   const [topLosers, setTopLosers] = useState<any[]>([]);
   const [cryptoData, setCryptoData] = useState<CryptoData[]>([]);
@@ -210,27 +247,27 @@ export const Dashboard = () => {
           title: 'Fed signals potential rate cuts later this year as inflation cools',
           source: 'Financial Times',
           url: '#',
-          image: 'https://placehold.co/600x400/e2e8f0/475569?text=Fed+News',
+          imageUrl: 'https://placehold.co/600x400/e2e8f0/475569?text=Fed+News',
           date: '2 hours ago',
-          summary: 'Federal Reserve officials indicated they may begin cutting interest rates in the coming months if inflation continues to moderate, according to minutes from their latest meeting.'
+          snippet: 'Federal Reserve officials indicated they may begin cutting interest rates in the coming months if inflation continues to moderate, according to minutes from their latest meeting.'
         },
         {
           id: '2',
           title: 'Indian IT stocks rally on strong quarterly results and positive outlook',
           source: 'Economic Times',
           url: '#',
-          image: 'https://placehold.co/600x400/e2e8f0/475569?text=IT+Stocks',
+          imageUrl: 'https://placehold.co/600x400/e2e8f0/475569?text=IT+Stocks',
           date: '4 hours ago',
-          summary: 'Major Indian IT companies including TCS, Infosys, and Wipro saw their stocks rise following better-than-expected quarterly results and optimistic guidance for the fiscal year.'
+          snippet: 'Major Indian IT companies including TCS, Infosys, and Wipro saw their stocks rise following better-than-expected quarterly results and optimistic guidance for the fiscal year.'
         },
         {
           id: '3',
           title: 'NVIDIA surpasses $2 trillion market cap on AI chip demand',
           source: 'Bloomberg',
           url: '#',
-          image: 'https://placehold.co/600x400/e2e8f0/475569?text=NVIDIA',
+          imageUrl: 'https://placehold.co/600x400/e2e8f0/475569?text=NVIDIA',
           date: '6 hours ago',
-          summary: 'NVIDIA\'s market value crossed $2 trillion as demand for its AI chips continues to surge, making it the third most valuable U.S. company after Microsoft and Apple.'
+          snippet: 'NVIDIA\'s market value crossed $2 trillion as demand for its AI chips continues to surge, making it the third most valuable U.S. company after Microsoft and Apple.'
         },
         {
           id: '4',
@@ -238,7 +275,7 @@ export const Dashboard = () => {
           source: 'Business Standard',
           url: '#',
           date: '8 hours ago',
-          summary: 'The Reserve Bank of India kept its key policy rate unchanged at 6.5% for the seventh consecutive time, emphasizing its commitment to bringing inflation down to its 4% target.'
+          snippet: 'The Reserve Bank of India kept its key policy rate unchanged at 6.5% for the seventh consecutive time, emphasizing its commitment to bringing inflation down to its 4% target.'
         },
         {
           id: '5',
@@ -246,7 +283,7 @@ export const Dashboard = () => {
           source: 'Reuters',
           url: '#',
           date: '10 hours ago',
-          summary: 'Crude oil prices increased by over 2% as geopolitical tensions in the Middle East raised concerns about potential supply disruptions in the region.'
+          snippet: 'Crude oil prices increased by over 2% as geopolitical tensions in the Middle East raised concerns about potential supply disruptions in the region.'
         }
       ]);
     } catch (error) {
@@ -398,7 +435,7 @@ export const Dashboard = () => {
   if (loading.stocks || loading.crypto || loading.news) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
     );
   }
@@ -412,58 +449,131 @@ export const Dashboard = () => {
           onClick={handleLogout}
           className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
         >
-          <LogOut className="h-4 w-4 mr-2" />
           Logout
         </button>
       </div>
       
-      {/* Portfolio Summary Cards - Always visible */}
+      {/* Portfolio Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-gray-900">Portfolio Value</h2>
-            <DollarSign className="h-5 w-5 text-indigo-600" />
+        {/* Portfolio Value Card */}
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2">
+            <h2 className="text-sm font-semibold text-white flex items-center">
+              <DollarSign className="h-4 w-4 mr-1.5" />
+              Portfolio Value
+            </h2>
           </div>
-          <p className="text-3xl font-bold text-gray-900">$124,567.89</p>
-          <div className="flex items-center mt-2 text-sm">
-            <span className="text-green-600 flex items-center">
-              <TrendingUp className="h-4 w-4 mr-1" />
-              +$1,234.56 (1.2%)
-            </span>
-            <span className="text-gray-500 ml-2">Today</span>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-gray-900">Asset Allocation</h2>
-            <PieChart className="h-5 w-5 text-indigo-600" />
-          </div>
-          <div className="h-48 mt-2">
-            <Pie data={pieChartData} options={pieChartOptions} />
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-gray-900">Watchlist</h2>
-            <BarChart2 className="h-5 w-5 text-indigo-600" />
-          </div>
-          <div className="space-y-2">
-            {stocks.slice(0, 3).map((stock) => (
-              <div key={stock.symbol} className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">{stock.symbol}</p>
-                  <p className="text-xs text-gray-500">{stock.name}</p>
+          <div className="p-5">
+            <div className="flex flex-col">
+              <p className="text-3xl font-bold text-gray-900">$124,567.89</p>
+              <div className="flex items-center mt-2 text-sm">
+                <span className="text-green-600 flex items-center font-medium">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  +$1,234.56 (1.2%)
+                </span>
+                <span className="text-gray-500 ml-2">Today</span>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-gray-50 rounded-md p-2">
+                  <span className="text-gray-500">Initial Investment</span>
+                  <p className="text-gray-900 font-semibold">$110,000.00</p>
                 </div>
-                <div className="text-right">
-                  <p className="font-medium">${stock.price.toFixed(2)}</p>
-                  <p className={`text-xs ${stock.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
-                  </p>
+                <div className="bg-gray-50 rounded-md p-2">
+                  <span className="text-gray-500">Total Gain</span>
+                  <p className="text-green-600 font-semibold">$14,567.89</p>
                 </div>
               </div>
-            ))}
+              <div className="w-full mt-4">
+                <div className="overflow-hidden h-2 mb-1 text-xs flex rounded bg-gray-200">
+                  <div style={{ width: "13.2%" }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-green-500"></div>
+                </div>
+                <p className="text-xs text-gray-500 text-right">+13.2% overall return</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Asset Allocation Card */}
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-500 to-cyan-500 px-4 py-2">
+            <h2 className="text-sm font-semibold text-white flex items-center">
+              <PieChart className="h-4 w-4 mr-1.5" />
+              Asset Allocation
+            </h2>
+          </div>
+          <div className="p-5">
+            <div className="h-40 mt-1 mb-2">
+              <Pie data={pieChartData} options={pieChartOptions} />
+            </div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-2">
+              {assetAllocation.map((asset) => (
+                <div key={asset.label} className="flex items-center text-xs">
+                  <div 
+                    className="w-3 h-3 rounded-full mr-1.5" 
+                    style={{ backgroundColor: asset.color }}
+                  ></div>
+                  <span className="text-gray-700">{asset.label}:</span>
+                  <span className="ml-auto font-semibold">{asset.value}%</span>
+                </div>
+              ))}
+            </div>
+            <button className="w-full mt-3 text-xs px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md flex items-center justify-center">
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Rebalance Portfolio
+            </button>
+          </div>
+        </div>
+        
+        {/* Watchlist Card */}
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-2 flex justify-between items-center">
+            <h2 className="text-sm font-semibold text-white flex items-center">
+              <BarChart2 className="h-4 w-4 mr-1.5" />
+              Watchlist
+            </h2>
+            <button className="text-white opacity-80 hover:opacity-100 text-xs">
+              View All
+            </button>
+          </div>
+          <div className="p-4">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center text-xs text-gray-500 px-1">
+                <span>Symbol</span>
+                <div className="flex space-x-4">
+                  <span>Price</span>
+                  <span>24h</span>
+                </div>
+              </div>
+              {(stocks.length > 0 ? stocks : [
+                {symbol: 'AAPL', name: 'Apple Inc.', price: 175.34, change: 1.42, changePercent: 1.42},
+                {symbol: 'MSFT', name: 'Microsoft Corp.', price: 328.79, change: 0.38, changePercent: 0.38},
+                {symbol: 'GOOGL', name: 'Alphabet Inc.', price: 142.56, change: -0.61, changePercent: -0.61},
+                {symbol: 'AMZN', name: 'Amazon.com Inc.', price: 173.25, change: 0.88, changePercent: 0.88}
+              ]).slice(0, 4).map((stock) => (
+                <div key={stock.symbol} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded-lg transition-colors">
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center text-xs font-bold text-gray-700 mr-2">
+                      {stock.symbol.slice(0, 2)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{stock.symbol}</p>
+                      <p className="text-xs text-gray-500 truncate max-w-[110px]">{stock.name}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-sm">${stock.price.toFixed(2)}</p>
+                    <p className={`text-xs ${stock.changePercent >= 0 ? 'text-green-600' : 'text-red-600'} flex items-center justify-end`}>
+                      {stock.changePercent >= 0 ? <ArrowUp className="h-3 w-3 mr-0.5" /> : <ArrowDown className="h-3 w-3 mr-0.5" />}
+                      {Math.abs(stock.changePercent).toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button className="w-full mt-2 text-xs px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md flex items-center justify-center">
+              <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
+              Add to Watchlist
+            </button>
           </div>
         </div>
       </div>
@@ -652,8 +762,7 @@ export const Dashboard = () => {
             {/* Crypto Section */}
             <div className="mb-8">
               <div className="flex items-center mb-4">
-                <Bitcoin className="h-5 w-5 text-indigo-600 mr-2" />
-                <h2 className="text-xl font-semibold text-gray-900">Cryptocurrencies</h2>
+                <span className="text-gray-600">Cryptocurrencies</span>
               </div>
               <div className="bg-white rounded-lg shadow-md overflow-hidden">
                 <div className="overflow-x-auto">
@@ -708,8 +817,7 @@ export const Dashboard = () => {
             {/* Financial News */}
             <div className="mb-8">
               <div className="flex items-center mb-4">
-                <Newspaper className="h-5 w-5 text-indigo-600 mr-2" />
-                <h2 className="text-xl font-semibold text-gray-900">Financial News</h2>
+                <span className="text-gray-600">Financial News</span>
               </div>
               {loading.news ? (
                 <div className="flex justify-center py-8">
@@ -728,7 +836,7 @@ export const Dashboard = () => {
                       )}
                       <div className="p-4">
                         <h3 className="font-semibold text-lg mb-2">{item.title}</h3>
-                        <p className="text-gray-600 text-sm mb-3">{item.summary}</p>
+                        <p className="text-gray-600 text-sm mb-3">{item.snippet}</p>
                         <div className="flex justify-between items-center text-xs text-gray-500">
                           <span>{item.source}</span>
                           <span>{new Date(item.date).toLocaleDateString()}</span>
@@ -749,79 +857,177 @@ export const Dashboard = () => {
             </div>
             
             {/* Market Trends Analysis */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center mb-4">
-                <TrendingUp className="h-5 w-5 text-indigo-600 mr-2" />
-                <h2 className="text-xl font-semibold text-gray-900">Market Trends Analysis</h2>
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4">
+                <h2 className="text-lg font-semibold text-white flex items-center">
+                  <TrendingUp className="h-5 w-5 mr-2" />
+                  Market Trends Analysis
+                </h2>
               </div>
               
-              <div className="space-y-6">
+              <div className="p-6 space-y-6">
+                {/* Sector Performance */}
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Sector Performance</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                      <span className="text-gray-700">Technology</span>
-                      <span className="text-green-600">+2.4%</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-md font-medium text-gray-900">Sector Performance</h3>
+                    <span className="text-xs text-gray-500">Last 24 hours</span>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {[
+                      { sector: 'Technology', change: 2.4, stocks: ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'AMD', 'INTC'] },
+                      { sector: 'Healthcare', change: 1.2, stocks: ['JNJ', 'PFE', 'UNH', 'ABBV', 'MRK', 'ABT'] },
+                      { sector: 'Financials', change: -0.8, stocks: ['JPM', 'BAC', 'GS', 'WFC', 'C', 'MS'] },
+                      { sector: 'Energy', change: -1.5, stocks: ['XOM', 'CVX', 'COP', 'BP', 'SLB', 'OXY'] },
+                      { sector: 'Consumer Staples', change: 0.3, stocks: ['PG', 'KO', 'PEP', 'WMT', 'COST', 'CL'] },
+                      { sector: 'Communication Services', change: 1.6, stocks: ['META', 'GOOG', 'NFLX', 'DIS', 'CMCSA', 'VZ'] }
+                    ].map((item, index) => (
+                      <div key={index} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center">
+                            <div className={`w-2 h-10 rounded-full mr-3 ${item.change >= 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                            <div>
+                              <h4 className="font-medium text-gray-900">{item.sector}</h4>
+                              <div className="flex flex-wrap items-center mt-1">
+                                {item.stocks.map((stock, idx) => (
+                                  <span key={idx} className="text-xs bg-gray-200 text-gray-700 rounded px-1.5 py-0.5 mr-1 mb-1">
+                                    {stock}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className={`text-lg font-semibold ${item.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {item.change >= 0 ? '+' : ''}{item.change}%
+                          </div>
+                        </div>
+                        
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div 
+                            className={`h-1.5 rounded-full ${item.change >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
+                            style={{ width: `${Math.min(Math.abs(item.change) * 10, 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Market Analysis */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-md font-medium text-gray-900">AI Market Analysis</h3>
+                    <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded">AI Generated</span>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-4 border border-indigo-100">
+                    <div className="flex items-start mb-4">
+                      <div className="bg-indigo-100 p-2 rounded-full mr-3">
+                        <Brain className="h-5 w-5 text-indigo-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">Market Outlook</h4>
+                        <p className="text-sm text-gray-700">
+                          Based on current market conditions, our AI analysis suggests a <span className="font-medium text-indigo-700">cautiously optimistic</span> outlook for the next quarter.
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                      <span className="text-gray-700">Healthcare</span>
-                      <span className="text-green-600">+1.2%</span>
+                    
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center">
+                        <TrendingUp className="h-4 w-4 text-green-600 mr-2" />
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">Technology and healthcare</span> sectors show strong momentum
+                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        <TrendingDown className="h-4 w-4 text-red-600 mr-2" />
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">Energy stocks</span> face headwinds due to commodity price fluctuations
+                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        <TrendingUp className="h-4 w-4 text-green-600 mr-2" />
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">Inflation concerns</span> are moderating
+                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        <TrendingUp className="h-4 w-4 text-green-600 mr-2" />
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">Federal Reserve</span> potentially shifting toward more accommodative policy
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                      <span className="text-gray-700">Financials</span>
-                      <span className="text-red-600">-0.8%</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                      <span className="text-gray-700">Energy</span>
-                      <span className="text-red-600">-1.5%</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                      <span className="text-gray-700">Consumer Staples</span>
-                      <span className="text-green-600">+0.3%</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                      <span className="text-gray-700">Utilities</span>
-                      <span className="text-green-600">+0.7%</span>
+                    
+                    <div className="flex justify-end">
+                      <button className="flex items-center text-xs text-indigo-600 hover:text-indigo-800 transition-colors">
+                        View detailed report
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                      </button>
                     </div>
                   </div>
                 </div>
                 
+                {/* Market Movers */}
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">AI Market Analysis</h3>
-                  <div className="bg-gray-50 p-4 rounded-md">
-                    <p className="text-gray-700 mb-3">
-                      Based on current market conditions, our AI analysis suggests a cautiously optimistic outlook for the next quarter. 
-                      Technology and healthcare sectors show strong momentum, while energy stocks face headwinds due to commodity price fluctuations.
-                    </p>
-                    <p className="text-gray-700">
-                      Inflation concerns are moderating, and the Federal Reserve's recent comments suggest a potential shift toward more accommodative policy. 
-                      This environment typically favors growth stocks and could provide tailwinds for the broader market.
-                    </p>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-md font-medium text-gray-900">Market Movers</h3>
+                    <span className="text-xs text-gray-500">Today's biggest changes</span>
                   </div>
-                </div>
-                
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Economic Indicators</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-gray-50 p-3 rounded-md">
-                      <p className="text-sm text-gray-500">Inflation (CPI)</p>
-                      <p className="text-xl font-semibold text-gray-900">3.2%</p>
-                      <p className="text-xs text-gray-500">Year-over-year</p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-green-50 px-4 py-2 border-b border-gray-200">
+                        <h4 className="text-sm font-medium text-green-800 flex items-center">
+                          <ArrowUp className="h-4 w-4 mr-1" />
+                          Top Gainers
+                        </h4>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {[
+                          { symbol: 'NVDA', name: 'NVIDIA Corp', change: 5.8 },
+                          { symbol: 'PLTR', name: 'Palantir Technologies', change: 4.7 },
+                          { symbol: 'AMD', name: 'Advanced Micro Devices', change: 4.1 },
+                          { symbol: 'AAPL', name: 'Apple Inc', change: 3.2 },
+                          { symbol: 'TSLA', name: 'Tesla Inc', change: 2.9 }
+                        ].map((stock, idx) => (
+                          <div key={idx} className="flex justify-between items-center p-3 hover:bg-gray-50">
+                            <div>
+                              <div className="font-medium">{stock.symbol}</div>
+                              <div className="text-xs text-gray-500">{stock.name}</div>
+                            </div>
+                            <div className="text-green-600 font-medium">+{stock.change}%</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-md">
-                      <p className="text-sm text-gray-500">Unemployment Rate</p>
-                      <p className="text-xl font-semibold text-gray-900">3.8%</p>
-                      <p className="text-xs text-gray-500">Current</p>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-md">
-                      <p className="text-sm text-gray-500">GDP Growth</p>
-                      <p className="text-xl font-semibold text-gray-900">2.1%</p>
-                      <p className="text-xs text-gray-500">Quarterly</p>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-md">
-                      <p className="text-sm text-gray-500">Fed Funds Rate</p>
-                      <p className="text-xl font-semibold text-gray-900">5.25%</p>
-                      <p className="text-xs text-gray-500">Current target</p>
+                    
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-red-50 px-4 py-2 border-b border-gray-200">
+                        <h4 className="text-sm font-medium text-red-800 flex items-center">
+                          <ArrowDown className="h-4 w-4 mr-1" />
+                          Top Losers
+                        </h4>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {[
+                          { symbol: 'XOM', name: 'Exxon Mobil', change: 2.3 },
+                          { symbol: 'MRK', name: 'Merck & Co', change: 1.8 },
+                          { symbol: 'CVX', name: 'Chevron Corporation', change: 1.7 },
+                          { symbol: 'WMT', name: 'Walmart Inc', change: 1.5 },
+                          { symbol: 'JNJ', name: 'Johnson & Johnson', change: 1.3 }
+                        ].map((stock, idx) => (
+                          <div key={idx} className="flex justify-between items-center p-3 hover:bg-gray-50">
+                            <div>
+                              <div className="font-medium">{stock.symbol}</div>
+                              <div className="text-xs text-gray-500">{stock.name}</div>
+                            </div>
+                            <div className="text-red-600 font-medium">-{stock.change}%</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>

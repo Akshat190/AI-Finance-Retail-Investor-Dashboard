@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Loader2, UserPlus, Mail, Lock, User, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, UserPlus, Mail, Lock, User, AlertCircle, CheckCircle2, BarChart2 } from 'lucide-react';
+import { RiskProfile } from '../types/AITypes';
 
 export const Register = () => {
   const navigate = useNavigate();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [riskProfile, setRiskProfile] = useState<RiskProfile>('moderate');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,10 +40,23 @@ export const Register = () => {
           .upsert({
             id: data.user.id,
             full_name: fullName,
+            risk_profile: riskProfile,
             updated_at: new Date().toISOString(),
           });
           
         if (profileError) throw profileError;
+        
+        // Create user settings record with default values
+        const { error: settingsError } = await supabase
+          .from('user_settings')
+          .upsert({
+            user_id: data.user.id,
+            use_default_key: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          
+        if (settingsError) throw settingsError;
         
         // Redirect to dashboard
         navigate('/dashboard');
@@ -148,6 +163,31 @@ export const Register = () => {
               </div>
               <p className="mt-1 text-xs text-gray-500">
                 Password must be at least 6 characters long
+              </p>
+            </div>
+            
+            <div>
+              <label htmlFor="risk-profile" className="block text-sm font-medium text-gray-700 mb-1">
+                Risk Profile
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <BarChart2 className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                </div>
+                <select
+                  id="risk-profile"
+                  name="riskProfile"
+                  value={riskProfile}
+                  onChange={(e) => setRiskProfile(e.target.value as RiskProfile)}
+                  className="appearance-none block w-full px-3 py-3 pl-10 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                >
+                  <option value="conservative">Conservative</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="aggressive">Aggressive</option>
+                </select>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                This helps us provide personalized investment recommendations
               </p>
             </div>
 

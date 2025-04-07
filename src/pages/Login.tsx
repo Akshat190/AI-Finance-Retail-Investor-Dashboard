@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import { Loader2, LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 export const Login = () => {
   const navigate = useNavigate();
+  const { signIn, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,17 +19,14 @@ export const Login = () => {
       setLoading(true);
       setError(null);
       
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Use Auth context signIn method which implements JWT handling
+      const { error } = await signIn(email, password);
       
       if (error) throw error;
       
-      if (data.user) {
-        // Redirect to dashboard on successful login
-        navigate('/dashboard');
-      }
+      // Redirect to dashboard on successful login
+      toast.success('Successfully logged in');
+      navigate('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during login');
       console.error('Login error:', err);
@@ -69,6 +68,9 @@ export const Login = () => {
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h2>
             <p className="text-gray-600">
               Sign in to your account to continue
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              Using secure JWT with short expiration times
             </p>
           </div>
           
@@ -155,10 +157,10 @@ export const Login = () => {
             <div>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || authLoading}
                 className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 shadow-sm transition-colors duration-200"
               >
-                {loading ? (
+                {loading || authLoading ? (
                   <>
                     <Loader2 className="h-5 w-5 mr-2 animate-spin" aria-hidden="true" />
                     Signing in...

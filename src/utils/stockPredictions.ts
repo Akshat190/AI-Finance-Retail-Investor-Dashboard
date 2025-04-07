@@ -247,84 +247,70 @@ export async function generatePrediction(stock: any) {
       sector === 'ETF' ? 8 : 7; // Default
     
     // Company-specific adjustment
-    const companyAdjustment = 
-      (profile.growthRate - baseSectorGrowth) * 0.7 + // Growth premium/discount
-      (profile.moat - 5) * 0.5 + // Competitive advantage
-      (profile.innovationScore - 5) * 0.3 - // Innovation premium
-      (profile.debtLevel - 3) * 0.2 - // Debt penalty
-      (profile.cyclicality - 5) * 0.1; // Cyclicality adjustment
+    const companyAdjustment = (profile.growthRate - baseSectorGrowth) / 2;
     
-    // Generate predictions with decreasing confidence
-    const oneMonthVolatility = volatilityFactor * Math.sqrt(1/12);
-    const threeMonthVolatility = volatilityFactor * Math.sqrt(3/12);
-    const sixMonthVolatility = volatilityFactor * Math.sqrt(6/12);
-    const oneYearVolatility = volatilityFactor;
-    const threeYearVolatility = volatilityFactor * Math.sqrt(3);
-    const fiveYearVolatility = volatilityFactor * Math.sqrt(5);
-    const tenYearVolatility = volatilityFactor * Math.sqrt(10);
+    // Economic scenario weighting
+    let weightedReturn = 0;
+    for (const scenario of economicScenarios) {
+      weightedReturn += scenario.probability * scenario.marketReturn;
+    }
     
-    // Random component for short-term predictions (more random in short term)
-    const shortTermRandomFactor = (Math.random() * 2 - 1) * 2; // Between -2 and 2
-    const mediumTermRandomFactor = (Math.random() * 2 - 1) * 1.5; // Between -1.5 and 1.5
-    const longTermRandomFactor = (Math.random() * 2 - 1) * 1; // Between -1 and 1
+    // Calculate prediction metrics
+    const baseReturn = baseSectorGrowth + companyAdjustment;
+    const marketAdjustedReturn = (baseReturn + weightedReturn) / 2;
     
-    // Calculate returns for different time periods
-    const oneMonth = (baseSectorGrowth / 12) + (companyAdjustment / 12) + (shortTermRandomFactor * oneMonthVolatility * 100);
-    const threeMonths = (baseSectorGrowth / 4) + (companyAdjustment / 4) + (shortTermRandomFactor * threeMonthVolatility * 70);
-    const sixMonths = (baseSectorGrowth / 2) + (companyAdjustment / 2) + (shortTermRandomFactor * sixMonthVolatility * 50);
-    const oneYear = baseSectorGrowth + companyAdjustment + (mediumTermRandomFactor * oneYearVolatility * 30);
-    const threeYear = (baseSectorGrowth + companyAdjustment) * 3 * (1 + (mediumTermRandomFactor * threeYearVolatility * 0.15));
-    const fiveYear = (baseSectorGrowth + companyAdjustment) * 5 * (1 + (longTermRandomFactor * fiveYearVolatility * 0.1));
-    const tenYear = (baseSectorGrowth + companyAdjustment) * 10 * (1 + (longTermRandomFactor * tenYearVolatility * 0.05));
+    // Add random variation for realism
+    const randomFactor = ((Math.random() * 2) - 1) * volatilityFactor * 10;
+    const projectedReturn = marketAdjustedReturn + randomFactor;
     
-    // Confidence levels decrease with time
-    const oneMonthConfidence = Math.round(85 - (oneMonthVolatility * 100));
-    const threeMonthConfidence = Math.round(80 - (threeMonthVolatility * 80));
-    const sixMonthConfidence = Math.round(75 - (sixMonthVolatility * 70));
-    const oneYearConfidence = Math.round(70 - (oneYearVolatility * 60));
-    const threeYearConfidence = Math.round(60 - (threeYearVolatility * 20));
-    const fiveYearConfidence = Math.round(50 - (fiveYearVolatility * 15));
-    const tenYearConfidence = Math.round(40 - (tenYearVolatility * 10));
+    // 1-year price prediction
+    const predictedPrice = safeNumber(currentPrice) * (1 + (projectedReturn / 100));
     
-    // Ensure confidence levels are within reasonable bounds
-    const boundConfidence = (conf: number) => Math.max(20, Math.min(95, conf));
+    // Confidence calculation (higher for lower volatility and stronger moat)
+    const confidenceBase = 70 - (volatilityFactor * 100) + (profile.moat * 3);
+    const confidence = Math.max(Math.min(confidenceBase + (Math.random() * 10), 95), 40);
     
-    // Generate detailed investment analysis
-    const analysis = generateDetailedInvestmentAnalysis(stock, profile, {
-      oneMonth,
-      sixMonths,
-      oneYear,
-      customYear: fiveYear,
-      years: 5
-    });
+    // Calculate shorter and longer timeframes
+    const oneMonthReturn = (projectedReturn / 12) + ((Math.random() * 2 - 1) * volatilityFactor * 5);
+    const sixMonthsReturn = (projectedReturn / 2) + ((Math.random() * 2 - 1) * volatilityFactor * 8);
+    const fiveYearCompounded = Math.pow(1 + (projectedReturn / 100), 5) - 1;
+    const fiveYearReturn = fiveYearCompounded * 100;
+    
+    // Get relevant sector outlook
+    const sectorOutlook = getSectorOutlook(sector);
+    
+    // Randomly select a scenario for analysis
+    const scenarios = economicScenarios.sort(() => Math.random() - 0.5).slice(0, 2);
+    const scenarioAnalysis = scenarios.map(s => 
+      `In a ${s.name.toLowerCase()} scenario, ${symbol} would likely perform ${sectorPerformanceDescription(sector, s.name)}.`
+    ).join(' ');
+    
+    // Generate analysis text
+    const analysis = `${symbol} shows a ${projectedReturn > 0 ? 'positive' : 'negative'} outlook with expected ${Math.abs(projectedReturn).toFixed(1)}% return over the next year. ${
+      profile.moat > 7 ? 'The company has a strong competitive advantage in its market. ' : 
+      profile.moat > 5 ? 'The company has a moderate competitive position. ' : 
+      'The company faces significant competitive pressures. '
+    }${scenarioAnalysis} ${sectorOutlook.split('.')[0]}.`;
     
     // Return the prediction object
     return {
       symbol,
       name,
+      currentPrice: safeNumber(currentPrice),
+      prediction: predictedPrice, // Required by the Portfolio component
+      changePercent: projectedReturn, // Required by the Portfolio component
+      confidence,
+      analysis,
+      oneMonth: oneMonthReturn,
+      sixMonths: sixMonthsReturn,
+      fiveYear: fiveYearReturn,
       sector,
-      currentPrice,
-      oneMonth,
-      threeMonths,
-      sixMonths,
-      oneYear,
-      threeYear,
-      fiveYear,
-      tenYear,
-      oneMonthConfidence: boundConfidence(oneMonthConfidence),
-      threeMonthConfidence: boundConfidence(threeMonthConfidence),
-      sixMonthConfidence: boundConfidence(sixMonthConfidence),
-      oneYearConfidence: boundConfidence(oneYearConfidence),
-      threeYearConfidence: boundConfidence(threeYearConfidence),
-      fiveYearConfidence: boundConfidence(fiveYearConfidence),
-      tenYearConfidence: boundConfidence(tenYearConfidence),
-      annualizedReturn: baseSectorGrowth + companyAdjustment,
-      confidence: boundConfidence(oneYearConfidence),
-      reasoning: analysis
+      isNew: false // Will be set by handleGeneratePrediction function
     };
+    
   } catch (error) {
     console.error('Error generating prediction:', error);
-    throw error;
+    throw new Error('Failed to generate prediction');
   }
 }
 

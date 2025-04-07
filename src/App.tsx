@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { supabase } from './lib/supabase';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
@@ -9,13 +8,17 @@ import { Screener } from './pages/Screener';
 import { Profile } from './pages/Profile';
 import { Loader2 } from 'lucide-react';
 import Investments from './pages/Investments';
-import Settings from './pages/Settings';
+// import Settings from './pages/Settings';
 import Chat from './pages/Chat';
 import { Toaster } from 'react-hot-toast';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import { useAuth } from './context/AuthContext';
 import Home from './pages/Home';
+import AIDemo from './pages/AIDemo';
+import AITester from './pages/AITester';
+import InvestmentAdvisor from './pages/InvestmentAdvisor';
+import MarketPredictionsPage from './pages/MarketPredictionsPage';
 
 // Simple Home component
 // const Home = () => (
@@ -40,32 +43,10 @@ import Home from './pages/Home';
 //     </div>
 //   </div>
 // );
-
+  
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const [loading, setLoading] = useState(true);
-  const [authenticated, setAuthenticated] = useState(false);
-  const navigate = useNavigate();
-  const { user } = useAuth();
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        if (user) {
-          setAuthenticated(true);
-        } else {
-          navigate('/login');
-        }
-      } catch (error) {
-        console.error('Error checking authentication:', error);
-        navigate('/login');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, [navigate, user]);
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -75,7 +56,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  return authenticated ? <>{children}</> : null;
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  return <>{children}</>;
 };
 
 function App() {
@@ -98,11 +83,17 @@ function App() {
               <Portfolio />
             </ProtectedRoute>
           } />
-          <Route path="/screener" element={
+          <Route path="/investment-advisor" element={
             <ProtectedRoute>
-              <Screener />
+              <InvestmentAdvisor />
             </ProtectedRoute>
           } />
+          <Route path="/market-predictions" element={
+            <ProtectedRoute>
+              <MarketPredictionsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/screener" element={<Screener />} />
           <Route path="/investments" element={
             <ProtectedRoute>
               <Investments />
@@ -113,14 +104,24 @@ function App() {
               <Chat />
             </ProtectedRoute>
           } />
-          <Route path="/settings" element={
+          {/* <Route path="/settings" element={
             <ProtectedRoute>
               <Settings />
             </ProtectedRoute>
-          } />
+          } /> */}
           <Route path="/profile" element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="/ai-demo" element={
+            <ProtectedRoute>
+              <AIDemo />
+            </ProtectedRoute>
+          } />
+          <Route path="/ai-tester" element={
+            <ProtectedRoute>
+              <AITester />
             </ProtectedRoute>
           } />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -33,7 +33,10 @@ export const GeminiProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      setLoading(true);
+      // Don't show loading if we already have an API key
+      if (!apiKey) {
+        setLoading(true);
+      }
       setError(null);
 
       const { data, error: fetchError } = await supabase
@@ -75,7 +78,23 @@ export const GeminiProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Fetch API key when user changes
   useEffect(() => {
-    fetchApiKey();
+    let isMounted = true;
+    
+    const fetchData = async () => {
+      if (isMounted) {
+        await fetchApiKey();
+      }
+    };
+    
+    if (user) {
+      fetchData();
+    } else {
+      setApiKey(GEMINI_API_KEY);
+    }
+    
+    return () => {
+      isMounted = false;
+    };
   }, [user]);
 
   const value = {
