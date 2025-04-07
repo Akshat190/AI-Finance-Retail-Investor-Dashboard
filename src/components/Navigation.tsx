@@ -9,7 +9,6 @@ import {
   Search, 
   DollarSign, 
   MessageSquare, 
-  Settings, 
   User,
   ChevronDown,
   Menu,
@@ -166,19 +165,6 @@ const Navigation: React.FC = () => {
                   )}
                 </div>
               ))}
-              
-              {/* Settings direct link */}
-              <Link
-                to="/settings"
-                className={`${
-                  location.pathname === '/settings'
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
-                } px-3 py-2 rounded-md text-sm font-medium flex items-center`}
-              >
-                <Settings className="h-4 w-4" />
-                <span className="ml-1.5">Settings</span>
-              </Link>
             </div>
           </div>
           
@@ -268,20 +254,6 @@ const Navigation: React.FC = () => {
               ))}
             </div>
           ))}
-          
-          {/* Settings in mobile */}
-          <Link
-            to="/settings"
-            className={`${
-              location.pathname === '/settings'
-                ? 'bg-indigo-50 border-l-4 border-indigo-500 text-indigo-700'
-                : 'border-l-4 border-transparent text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
-            } block px-3 py-2 text-base font-medium flex items-center`}
-            onClick={() => setIsMenuOpen(false)}
-          >
-            <Settings className="h-5 w-5" />
-            <span className="ml-3">Settings</span>
-          </Link>
         </div>
         
         {/* Mobile user section */}

@@ -1,8 +1,8 @@
    // src/components/AISettings.tsx
    import React, { useState, useEffect } from 'react';
    import { Card, Form, Button, Alert } from 'react-bootstrap';
-   import { useAuth } from '../contexts/AuthContext';
-   import api from '../services/api';
+   import { useAuth } from '../context/AuthContext';
+   import { supabase } from '../lib/supabase';
 
    interface AIFeatures {
      portfolioAnalysis: boolean;
@@ -45,9 +45,16 @@
      useEffect(() => {
        const fetchPreferences = async (): Promise<void> => {
          try {
-           const response = await api.get('/user/ai-preferences');
-           if (response.data) {
-             setPreferences(response.data);
+           const { data, error } = await supabase
+             .from('user_preferences')
+             .select('*')
+             .eq('user_id', user?.id)
+             .single();
+
+           if (error) throw error;
+           
+           if (data) {
+             setPreferences(data.preferences);
            }
          } catch (err) {
            console.error('Error fetching preferences:', err);
@@ -89,7 +96,15 @@
        setSuccess(false);
        
        try {
-         await api.post('/user/ai-preferences', preferences);
+         const { error } = await supabase
+           .from('user_preferences')
+           .upsert({
+             user_id: user?.id,
+             preferences: preferences
+           });
+           
+         if (error) throw error;
+         
          setSuccess(true);
        } catch (err) {
          console.error('Error saving preferences:', err);
@@ -131,9 +146,9 @@
                  value={preferences.investmentHorizon}
                  onChange={handleChange}
                >
-                 <option value="short">Short (< 2 years)</option>
+                 <option value="short">Short (less than 2 years)</option>
                  <option value="medium">Medium (2-5 years)</option>
-                 <option value="long">Long (5+ years)</option>
+                 <option value="long">Long (more than 5 years)</option>
                </Form.Select>
              </Form.Group>
              
