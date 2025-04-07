@@ -848,7 +848,7 @@ export const Screener = () => {
       const preferredProvider = 'openrouter';
       
       // Use the provided OpenRouter API key
-      const apiKey = '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';
+      const apiKey = 'api-key';
       
       // Get AI config
       const config = getAIConfig(preferredProvider, apiKey);
