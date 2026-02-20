@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import AutocompleteInput from '../components/AutocompleteInput';
+import React, { useState, useCallback } from 'react';
 import AISearchBar from '../components/AISearchBar';
 import AIContentGenerator from '../components/AIContentGenerator';
 import StockSearch from '../components/StockSearch';
+import ResearchAssistant from '../components/ResearchAssistant';
 
 const AIDemo: React.FC = () => {
   // Sample preset prompts for the content generator
@@ -15,6 +15,11 @@ const AIDemo: React.FC = () => {
   ];
 
   const [activeTab, setActiveTab] = useState<'search' | 'content'>('search');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -44,83 +49,34 @@ const AIDemo: React.FC = () => {
         </button>
       </div>
       
-      {/* Search & Autocomplete Tab */}
+      {/* Search & Analysis Tab */}
       {activeTab === 'search' && (
-        <div className="space-y-8">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6">Smart Investment Search</h2>
-              
-              <div className="mb-8">
-                <h3 className="text-md font-medium text-gray-700 mb-3">
-                  Find Investment Opportunities
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Try searching for stocks, ETFs, or investment strategies with our AI-powered search
-                </p>
-                <AISearchBar
-                  placeholder="E.g., 'tech stocks with high growth', 'AAPL analysis', or 'best dividend ETFs'"
-                  className="w-full"
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-gray-50 p-5 rounded-lg">
-                  <h3 className="text-md font-medium text-gray-700 mb-3">
-                    Research Assistant
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Get intelligent autocomplete as you type investment questions
-                  </p>
-                  <AutocompleteInput
-                    placeholder="Try 'How to analyze...' or 'Best strategies for...'"
-                    className="w-full bg-white"
-                  />
-                  
-                  <div className="mt-4 bg-indigo-50 p-3 rounded text-sm text-indigo-700">
-                    <strong>Pro tip:</strong> Type a few characters and wait for AI suggestions to appear
-                  </div>
-                </div>
-                
-                <div className="bg-gray-50 p-5 rounded-lg">
-                  <h3 className="text-md font-medium text-gray-700 mb-3">
-                    Stock Ticker Search
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Quickly find company tickers with intelligent suggestions
-                  </p>
-                  <StockSearch className="w-full" />
-                  
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <span className="inline-block px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs">AAPL</span>
-                    <span className="inline-block px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs">MSFT</span>
-                    <span className="inline-block px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs">GOOGL</span>
-                    <span className="inline-block px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs">AMZN</span>
-                    <span className="inline-block px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs">TSLA</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <ResearchAssistant />
+          
+          <div className="bg-gray-50 p-5 rounded-lg">
+            <h3 className="text-md font-medium text-gray-700 mb-3">
+              Stock Search
+            </h3>
+            <p className="text-gray-600 mb-4">
+              Search for stocks and get real-time suggestions
+            </p>
+            <StockSearch
+              className="w-full"
+              placeholder="Search for stocks (e.g., AAPL, MSFT, TSLA)..."
+            />
           </div>
         </div>
       )}
       
       {/* Content Generation Tab */}
       {activeTab === 'content' && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Investment Content Generator</h2>
-            <p className="text-gray-600 mb-6">
-              Create professional financial content for reports, analysis, or research using AI assistance
-            </p>
-            
-            <AIContentGenerator
-              placeholder="Describe what financial content you need..."
-              presetPrompts={presetPrompts}
-              className="w-full"
-              systemPrompt="You are a professional financial analyst helping create high-quality investment content. Focus on providing accurate, insightful, and actionable information."
-            />
-          </div>
+        <div className="bg-gray-50 p-5 rounded-lg">
+          <AIContentGenerator
+            presetPrompts={presetPrompts}
+            placeholder="Describe what you want to generate..."
+            className="w-full"
+          />
         </div>
       )}
       

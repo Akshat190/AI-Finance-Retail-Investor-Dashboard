@@ -51,56 +51,98 @@ export function useAutocomplete({
   
   // Use a ref to keep track of the latest input value for the debounced function
   const inputRef = useRef(input);
+  const isMounted = useRef(true);
+  const lastFetchRef = useRef(0);
+  const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Update input ref when input changes
   useEffect(() => {
     inputRef.current = input;
   }, [input]);
+
+  // Set mounted state
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Debounced function to fetch autocomplete suggestions
   const fetchSuggestions = useCallback(
     debounce(async () => {
       const currentInput = inputRef.current;
+      const now = Date.now();
+      
+      // Prevent multiple fetches within a short time
+      if (now - lastFetchRef.current < debounceMs) {
+        return;
+      }
+      
+      lastFetchRef.current = now;
+      
       if (!currentInput || currentInput.length < minChars) {
-        setSuggestions([]);
+        if (isMounted.current) {
+          setSuggestions([]);
+        }
         return;
       }
 
       try {
-        setLoading(true);
-        setError(null);
+        if (isMounted.current) {
+          setLoading(true);
+          setError(null);
+        }
         
         let results: AutocompleteResult[] | string[] = [];
         
         if (type === 'ticker') {
           results = await AIService.getTickerAutocomplete(currentInput, options.limit);
         } else {
-          results = await AIService.getAutocomplete(currentInput, options);
+          results = await AIService.getAutocompleteSuggestions(currentInput, '', options);
         }
         
-        setSuggestions(results);
+        if (isMounted.current) {
+          setSuggestions(results);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch suggestions'));
-        setSuggestions([]);
+        if (isMounted.current) {
+          setError(err instanceof Error ? err : new Error('Failed to fetch suggestions'));
+          setSuggestions([]);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted.current) {
+          setLoading(false);
+        }
       }
     }, debounceMs),
-    [minChars, options, type]
+    [minChars, options.limit, type, debounceMs]
   );
 
   // Fetch suggestions when input changes
   useEffect(() => {
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
+    }
+
     if (input.length >= minChars) {
-      fetchSuggestions();
+      fetchTimeoutRef.current = setTimeout(() => {
+        fetchSuggestions();
+      }, debounceMs);
     } else {
       setSuggestions([]);
     }
     setSelectedIndex(-1);
-    
-    // Cleanup debounced function on unmount
+
     return () => {
-      fetchSuggestions.cancel();
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
     };
-  }, [input, minChars, fetchSuggestions]);
+  }, [input, minChars, fetchSuggestions, debounceMs]);
 
   // Handle input change
   const handleInputChange = useCallback((value: string) => {

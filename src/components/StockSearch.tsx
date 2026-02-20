@@ -1,11 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AIService from '../services/AIService';
 import { useNavigate } from 'react-router-dom';
+import { searchStock } from '../utils/stockPredictions';
 
 interface StockSearchProps {
   onSelect?: (ticker: string) => void;
   className?: string;
   placeholder?: string;
+}
+
+interface StockSuggestion {
+  symbol: string;
+  name: string;
+  source: 'local' | 'api';
+  id: string; // Unique identifier for each suggestion
 }
 
 const StockSearch: React.FC<StockSearchProps> = ({
@@ -14,62 +22,101 @@ const StockSearch: React.FC<StockSearchProps> = ({
   placeholder = 'Search for a stock (e.g., AAPL, MSFT, TSLA)...'
 }) => {
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const navigate = useNavigate();
 
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setQuery(value);
-    
-    if (value.length >= 1) {
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (query.length < 1) {
+        setSuggestions([]);
+        return;
+      }
+
       setLoading(true);
-      
       try {
-        const results = await AIService.getTickerAutocomplete(value);
-        setSuggestions(results);
-        setSelectedIndex(-1);
+        // First try local search
+        const localResults = searchStock(query)
+          .filter(stock => stock.symbol && stock.name) // Filter out invalid results
+          .map((stock, index) => ({
+            symbol: stock.symbol,
+            name: stock.name,
+            source: 'local' as const,
+            id: `local-${stock.symbol}-${index}`
+          }));
+        
+        // If we have few results, try the API
+        if (localResults.length < 5) {
+          const apiResults = await AIService.getTickerAutocomplete(query);
+          if (apiResults && apiResults.length > 0) {
+            const validApiResults = apiResults
+              .filter(stock => stock && stock.symbol && stock.name) // Filter out invalid results
+              .filter(apiStock => !localResults.some(local => local.symbol === apiStock.symbol))
+              .map((stock, index) => ({
+                symbol: stock.symbol,
+                name: stock.name,
+                source: 'api' as const,
+                id: `api-${stock.symbol}-${index}`
+              }));
+            
+            setSuggestions([...localResults, ...validApiResults].slice(0, 10));
+          } else {
+            setSuggestions(localResults.slice(0, 10));
+          }
+        } else {
+          setSuggestions(localResults.slice(0, 10));
+        }
       } catch (error) {
         console.error('Error getting ticker suggestions:', error);
+        setSuggestions([]);
       } finally {
         setLoading(false);
       }
-    } else {
-      setSuggestions([]);
-      setSelectedIndex(-1);
-    }
+    };
+
+    const debounceTimer = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [query]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setQuery(value);
+    setShowSuggestions(true);
+    setSelectedIndex(-1);
   };
-  
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (suggestions.length === 0) return;
-    
-    // Handle arrow up/down
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(prevIndex => 
-        prevIndex < suggestions.length - 1 ? prevIndex + 1 : prevIndex
+      setSelectedIndex(prev => 
+        prev < suggestions.length - 1 ? prev + 1 : prev
       );
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(prevIndex => prevIndex > 0 ? prevIndex - 1 : 0);
+      setSelectedIndex(prev => prev > 0 ? prev - 1 : 0);
     } else if (e.key === 'Enter' && selectedIndex >= 0) {
       handleSelectTicker(suggestions[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
     }
   };
-  
-  const handleSelectTicker = (ticker: string) => {
-    setQuery(ticker);
+
+  const handleSelectTicker = (stock: StockSuggestion) => {
+    setQuery(stock.symbol);
     setSuggestions([]);
+    setShowSuggestions(false);
     
     if (onSelect) {
-      onSelect(ticker);
+      onSelect(stock.symbol);
     } else {
-      // Default behavior: navigate to stock details
-      navigate(`/stocks/${ticker}`);
+      navigate(`/stocks/${stock.symbol}`);
     }
   };
-  
+
   return (
     <div className="relative">
       <div className="relative">
@@ -78,6 +125,7 @@ const StockSearch: React.FC<StockSearchProps> = ({
           value={query}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          onFocus={() => setShowSuggestions(true)}
           placeholder={placeholder}
           className={`w-full p-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${className}`}
         />
@@ -88,18 +136,20 @@ const StockSearch: React.FC<StockSearchProps> = ({
         )}
       </div>
       
-      {suggestions.length > 0 && (
+      {showSuggestions && suggestions.length > 0 && (
         <ul className="absolute z-50 mt-1 w-full bg-white shadow-lg max-h-60 rounded-lg py-1 text-base overflow-auto focus:outline-none sm:text-sm border border-gray-200">
-          {suggestions.map((ticker, index) => (
+          {suggestions.map((stock, index) => (
             <li
-              key={ticker}
+              key={stock.id}
               className={`cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-indigo-50 transition-colors ${
                 index === selectedIndex ? 'bg-indigo-50 text-indigo-700' : 'text-gray-900'
               }`}
-              onClick={() => handleSelectTicker(ticker)}
+              onClick={() => handleSelectTicker(stock)}
             >
               <div className="flex items-center justify-between">
-                <span className="font-medium block truncate">{ticker}</span>
+                <span className="font-medium block truncate">
+                  {`${stock.symbol} - ${stock.name}`}
+                </span>
                 {index === selectedIndex && (
                   <span className="text-indigo-600 absolute inset-y-0 right-0 flex items-center pr-4">
                     <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

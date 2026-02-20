@@ -31,8 +31,8 @@
      private openRouterBaseUrl: string;
      
      constructor() {
-       this.apiKey = GEMINI_API_KEY;
-       this.openRouterKey = OPENROUTER_API_KEY;
+       this.apiKey = GEMINI_API_KEY || '';
+       this.openRouterKey = OPENROUTER_API_KEY || '';
        this.geminiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
        this.openRouterBaseUrl = 'https://openrouter.ai/api/v1';
        
@@ -61,7 +61,7 @@
              }
              
              if (data.openrouter_api_key) {
-               this.openRouterKey = data.openrouter_api_key || OPENROUTER_API_KEY;
+               this.openRouterKey = data.openrouter_api_key;
              }
              
              this.currentProvider = data.preferred_ai_provider as 'gemini' | 'openrouter' || 'gemini';
@@ -80,6 +80,23 @@
        try {
          // Use specified provider or default to Gemini
          this.currentProvider = options.provider || this.currentProvider;
+         
+         // Check if we have valid API keys
+         if (this.currentProvider === 'gemini' && !this.apiKey) {
+           console.warn('Gemini API key is missing, falling back to OpenRouter');
+           this.currentProvider = 'openrouter';
+         }
+         
+         if (this.currentProvider === 'openrouter' && !this.openRouterKey) {
+           console.warn('OpenRouter API key is missing, falling back to Gemini');
+           this.currentProvider = 'gemini';
+         }
+         
+         // If both API keys are missing, return a default response
+         if (!this.apiKey && !this.openRouterKey) {
+           console.warn('No API keys available, returning default response');
+           return this.getDefaultResponse(prompt);
+         }
          
          // Try to generate with the current provider
          if (this.currentProvider === 'gemini') {
@@ -102,8 +119,24 @@
          }
        } catch (error) {
          console.error("AI Service Error:", error);
-         throw error;
+         return this.getDefaultResponse(prompt);
        }
+     }
+     
+     /**
+      * Get a default response when no API keys are available
+      */
+     private getDefaultResponse(prompt: string): string {
+       // Simple fallback responses for common queries
+       if (prompt.toLowerCase().includes('stock') || prompt.toLowerCase().includes('market')) {
+         return "I'm currently unable to access real-time market data. Please check back later or ensure your API keys are properly configured.";
+       }
+       
+       if (prompt.toLowerCase().includes('analysis') || prompt.toLowerCase().includes('research')) {
+         return "I'm temporarily unable to perform detailed analysis. Please try again later or check your API configuration.";
+       }
+       
+       return "I'm currently unable to process your request. Please ensure your API keys are properly configured or try again later.";
      }
      
      /**
@@ -239,107 +272,64 @@
       * Generate content using OpenRouter API
       */
      private async generateOpenRouterContent(prompt: string, options: AIServiceOptions = {}): Promise<string> {
-       // Use the provided model or fall back to default, ensuring it's a valid model ID
-       const model = options.model || DEFAULT_OPENROUTER_MODEL;
-       
-       // Log model being used for debugging
-       console.log(`Using OpenRouter model: ${model}`);
-       
-       const messages = [];
-       
-       // Add system prompt if provided
-       if (options.systemPrompt) {
-         messages.push({
-           role: 'system',
-           content: options.systemPrompt
-         });
-       }
-       
-       // Add the main user prompt
-       messages.push({
-         role: 'user',
-         content: prompt
-       });
-       
-       const payload = {
-         model: model,
-         messages: messages,
-         temperature: options.temperature ?? 0.7,
-         max_tokens: options.maxOutputTokens ?? 1024
-       };
-
-       console.log(`OpenRouter payload:`, JSON.stringify({
-         model: payload.model,
-         temperature: payload.temperature,
-         max_tokens: payload.max_tokens,
-         message_count: payload.messages.length
-       }));
-
        try {
          // Check if the API key is valid
          if (!this.openRouterKey || this.openRouterKey.trim() === '') {
-           throw new Error('OpenRouter API key is missing. Please add it in the settings.');
+           console.warn('OpenRouter API key is missing. Falling back to Gemini.');
+           return this.generateGeminiContent(prompt, options);
          }
+
+         const model = options.model || DEFAULT_OPENROUTER_MODEL;
+         const messages = [
+           {
+             role: 'user',
+             content: prompt
+           }
+         ];
+
+         const payload = {
+           model: model,
+           messages: messages,
+           temperature: options.temperature ?? 0.7,
+           max_tokens: options.maxOutputTokens ?? 1024
+         };
 
          const response = await fetch(OPENROUTER_API_ENDPOINT, {
            method: 'POST',
            headers: {
              'Content-Type': 'application/json',
              'Authorization': `Bearer ${this.openRouterKey}`,
-             'HTTP-Referer': window.location.origin, // Required by OpenRouter
-             'X-Title': 'Finance App' // Optional - name of your app
+             'HTTP-Referer': window.location.origin,
+             'X-Title': 'Finance App'
            },
            body: JSON.stringify(payload),
          });
 
-         // Log response status for debugging
-         console.log(`OpenRouter response status: ${response.status} ${response.statusText}`);
-
-         // Get the response text for potential error handling
-         const responseText = await response.text();
-         
          if (!response.ok) {
-           let errorMessage = `OpenRouter API Error: ${response.status} ${response.statusText}`;
-           try {
-             // Try to parse the error as JSON
-             const errorData = JSON.parse(responseText);
-             errorMessage = `OpenRouter API Error: ${JSON.stringify(errorData)}`;
-             console.error('OpenRouter API Error:', errorData);
-           } catch (_) {
-             // If parsing fails, use the raw response text
-             console.error('OpenRouter API Error (raw):', responseText);
+           const errorData = await response.json();
+           console.error('OpenRouter API error:', errorData);
+           
+           // If unauthorized, fall back to Gemini
+           if (response.status === 401) {
+             console.warn('OpenRouter API key is invalid. Falling back to Gemini.');
+             return this.generateGeminiContent(prompt, options);
            }
-           throw new Error(errorMessage);
+           
+           throw new Error(`OpenRouter API Error: ${JSON.stringify(errorData)}`);
          }
 
-         // Parse the response as JSON
-         let data;
-         try {
-           data = JSON.parse(responseText);
-         } catch (e) {
-           console.error('Failed to parse OpenRouter response:', e);
-           console.log('Raw response:', responseText);
-           throw new Error('Invalid JSON response from OpenRouter API');
-         }
-         
-         if (!data.choices || data.choices.length === 0) {
-           console.error('No choices in OpenRouter response:', data);
-           throw new Error('No content generated from OpenRouter');
-         }
-
-         // Check if we have valid content
-         const content = data.choices[0].message?.content;
-         if (!content) {
-           console.error('Empty content in OpenRouter response:', data.choices[0]);
-           throw new Error('Empty content received from OpenRouter');
-         }
-
-         return content;
-       } catch (error: unknown) {
+         const data = await response.json();
+         return data.choices[0].message.content;
+       } catch (error) {
          console.error('OpenRouter processing error:', error);
-         // Rethrow the error with more context
-         const errorMessage = error instanceof Error ? error.message : String(error);
-         throw new Error(`Failed to generate content with OpenRouter: ${errorMessage}`);
+         
+         // If there's an error with OpenRouter, fall back to Gemini
+         try {
+           console.warn('Falling back to Gemini due to OpenRouter error');
+           return await this.generateGeminiContent(prompt, options);
+         } catch (fallbackError) {
+           throw new Error(`Failed to generate content with both OpenRouter and Gemini: ${error instanceof Error ? error.message : String(error)}`);
+         }
        }
      }
 
@@ -361,31 +351,73 @@
        try {
          // Format prompt for autocomplete
          const prompt = `
-           Given the following code context and current input, suggest up to ${options.limit || 5} relevant autocompletions.
+           Given the following input, suggest up to ${options.limit || 5} relevant autocompletions.
+           Only return a valid JSON array of strings, without any markdown formatting or additional text.
            
-           Current code:
-           ${context}
+           Input: ${input}
            
-           Current user input: ${input}
-           
-           Return the suggestions as a JSON array of objects with "text" (the completion text) and "description" (a brief explanation).
-           Only include the completion part after the current input.
+           Example response format: ["suggestion1", "suggestion2", "suggestion3"]
          `;
          
          const response = await this.generateContent(prompt, {
-           systemPrompt: "You are a coding assistant providing autocomplete suggestions. Only provide valid JSON.",
-           temperature: options.temperature || 0.3,
+           systemPrompt: "You are an autocomplete assistant. Only return valid JSON arrays of strings.",
+           temperature: options.temperature || 0.1,
          });
+
+         // Clean the response to ensure it's valid JSON
+         const cleanResponse = response
+           .replace(/```json/g, '')
+           .replace(/```/g, '')
+           .trim();
          
-         const parsedResponse = JSON.parse(response);
+         const parsedResponse = JSON.parse(cleanResponse);
          
          if (Array.isArray(parsedResponse)) {
-           return parsedResponse.slice(0, options.limit || 5); // Ensure we return at most 5 suggestions
+           return parsedResponse.map(text => ({ text, score: 1 }));
          }
          
          return [];
        } catch (error) {
          console.error('Autocomplete error:', error);
+         return [];
+       }
+     }
+
+     /**
+      * Get autocomplete suggestions for stock ticker symbols
+      */
+     async getTickerAutocomplete(input: string, limit: number = 5): Promise<string[]> {
+       try {
+         // Format prompt for ticker autocomplete
+         const prompt = `
+           Given the following input, suggest up to ${limit} relevant stock ticker symbols.
+           Only return a valid JSON array of strings, without any markdown formatting or additional text.
+           
+           Input: ${input}
+           
+           Example response format: ["AAPL", "MSFT", "GOOGL"]
+         `;
+         
+         const response = await this.generateContent(prompt, {
+           systemPrompt: "You are a stock ticker autocomplete assistant. Only return valid JSON arrays of stock ticker symbols.",
+           temperature: 0.1,
+         });
+
+         // Clean the response to ensure it's valid JSON
+         const cleanResponse = response
+           .replace(/```json/g, '')
+           .replace(/```/g, '')
+           .trim();
+         
+         const parsedResponse = JSON.parse(cleanResponse);
+         
+         if (Array.isArray(parsedResponse)) {
+           return parsedResponse;
+         }
+         
+         return [];
+       } catch (error) {
+         console.error('Ticker autocomplete error:', error);
          return [];
        }
      }

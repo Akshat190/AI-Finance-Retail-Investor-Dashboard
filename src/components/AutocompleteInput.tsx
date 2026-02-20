@@ -1,4 +1,4 @@
-import React, { forwardRef, useState, useRef, useEffect } from 'react';
+import React, { forwardRef, useState, useRef, useEffect, useCallback } from 'react';
 import useAutocomplete from '../hooks/useAutocomplete';
 import { AutocompleteResult } from '../types/AITypes';
 
@@ -64,10 +64,10 @@ const AutocompleteInput = forwardRef<HTMLInputElement, AutocompleteInputProps>(
       if (inputValue !== input) {
         handleInputChange(inputValue);
       }
-    }, [inputValue, input]);
+    }, [inputValue, input, handleInputChange]);
     
     // Handle input changes
-    const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const onInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
       const newValue = e.target.value;
       
       // Update local state if uncontrolled
@@ -79,10 +79,10 @@ const AutocompleteInput = forwardRef<HTMLInputElement, AutocompleteInputProps>(
       if (onChange) {
         onChange(newValue);
       }
-    };
+    }, [isControlled, onChange]);
     
     // Handle suggestion selection
-    const onSuggestionSelect = (suggestion: AutocompleteResult | string) => {
+    const onSuggestionSelect = useCallback((suggestion: AutocompleteResult | string) => {
       const selectedValue = typeof suggestion === 'string' ? suggestion : suggestion.text;
       
       // Update local state if uncontrolled
@@ -102,7 +102,7 @@ const AutocompleteInput = forwardRef<HTMLInputElement, AutocompleteInputProps>(
       
       // Call our hook's handler
       handleSelectSuggestion(suggestion);
-    };
+    }, [isControlled, onSelect, onChange, handleSelectSuggestion]);
     
     // Ref for the dropdown container
     const dropdownRef = useRef<HTMLDivElement>(null);
